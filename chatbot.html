@@ -2247,6 +2247,11 @@ ${knowledgeBase}
         .replace(/>/g, "&gt;");
     }
 
+    function countOccurrences(text, token) {
+      if (!text || !token) return 0;
+      return text.split(token).length - 1;
+    }
+
     function applyInlineFormatting(text) {
       const cleaned = text
         .replace(/<br\s*\/?>/gi, " ")
@@ -2602,7 +2607,7 @@ ${knowledgeBase}
         videoToggle,
       } = addBotMessage(text);
       setTtsButtonText(ttsButton, text);
-      renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      renderVideoRecommendation({ video: null, keyword: "", videoContainer, videoToggle });
       if (options.introButtons?.length) {
         const buttonGroup = document.createElement("div");
         buttonGroup.className = "mt-3 flex flex-wrap gap-2";
@@ -3265,14 +3270,35 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       return { ...best, score: bestScore };
     }
 
-    function buildVideoEmbed(video) {
+    function findBestKeywordForVideo(text, video) {
+      if (!video || !Array.isArray(video.keywords) || !video.keywords.length) return "";
+      const normalized = (text || "").toLowerCase();
+      let bestKeyword = video.keywords[0] || "";
+      let bestScore = 0;
+      video.keywords.forEach((keyword) => {
+        const token = keyword?.toLowerCase().trim();
+        if (!token) return;
+        const score = countOccurrences(normalized, token);
+        if (score > bestScore) {
+          bestScore = score;
+          bestKeyword = keyword;
+        }
+      });
+      return bestKeyword;
+    }
+
+    function buildVideoEmbed(video, keyword) {
       if (!video) return "";
       const youtubeUrl = video.watchUrl || `https://www.youtube.com/watch?v=${video.youtubeId}`;
       const startParam = video.startSeconds ? `?start=${video.startSeconds}` : "";
       const embedUrl = `https://www.youtube-nocookie.com/embed/${video.youtubeId}${startParam}`;
+      const keywordLine = keyword
+        ? `Here's the segment of the online recording that discusses ${escapeHtml(keyword)}.`
+        : "";
       return `
         <div class="space-y-2">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Related video</div>
+          ${keywordLine ? `<p class="text-sm text-slate-600">${keywordLine}</p>` : ""}
           <div class="video-embed">
             <iframe
               src="${embedUrl}"
@@ -3311,7 +3337,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       });
     }
 
-    function renderVideoRecommendation({ video, videoContainer, videoToggle }) {
+    function renderVideoRecommendation({ video, keyword, videoContainer, videoToggle }) {
       if (!videoContainer || !videoToggle) return;
       videoToggle.onclick = () => {
         showVideosEnabled = !showVideosEnabled;
@@ -3326,7 +3352,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         updateAllVideoVisibility();
         return;
       }
-      videoContainer.innerHTML = buildVideoEmbed(video);
+      videoContainer.innerHTML = buildVideoEmbed(video, keyword);
       videoContainer.dataset.hasVideo = "true";
       updateAllVideoVisibility();
     }
@@ -3484,13 +3510,21 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           assistantText || lastUserPrompt
             ? findBestVideoMatch(`${lastUserPrompt}\n${assistantText}`)
             : null;
+        const matchedVideo = modelVideoMatch || fallbackVideoMatch;
+        const keywordText = matchedVideo
+          ? findBestKeywordForVideo(
+              `${lastUserPrompt}\n${assistantText}\n${video?.reason || ""}`,
+              matchedVideo
+            )
+          : "";
         renderVideoRecommendation({
-          video: modelVideoMatch || fallbackVideoMatch,
+          video: matchedVideo,
+          keyword: keywordText,
           videoContainer,
           videoToggle,
         });
       } else {
-        renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+        renderVideoRecommendation({ video: null, keyword: "", videoContainer, videoToggle });
       }
       if (assistantText && autoTtsEnabled) {
         await playTtsForText(assistantText, ttsButton, botContentEl);
