@@ -437,7 +437,7 @@
                 type="button"
                 class="followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]"
                 data-role="intro-prompt"
-                data-prompt="Tell me about ways I can use you as a chatbot to learn the material, including getting you to create narratives, mnemonics, etc. and how I can use the buttons in the response you give me for things like tutor mode, quizzing me.">
+                data-response-id="intro-usage">
                 How do I use you?
               </button>
             </div>
@@ -564,6 +564,26 @@
     const HF_TTS_VOICES = {
       female: "af_heart",
       male: "am_fenrir",
+    };
+    const INTRO_PROMPT_RESPONSES = {
+      "intro-usage": `I am designed to help you learn the material in the SPX102 Introduction to Coaching course. I can speak to you if you click the speaker icon next to my response, and you can speak to me by clicking the microphone button either as a once off question "push to talk mode) or as a conversation (continuous mode).
+
+You can also upload PDF documents to me if you want me to read something (please respect copyright!) related to the course.
+
+I can answer your questions based on the course material, and I can also help you engage with the material in different ways.
+
+Here are some ways you can use me:
+
+Ask questions: You can ask me specific questions about the course content, and I will do my best to answer them using the information I have. If the question includes a  keyword from a recorded lecture I will show you the video of that section.
+Request explanations: If you find a concept difficult, you can ask me to explain it in simpler terms or provide an example.
+Get narratives and stories: I can generate short stories or poems related to the course content.
+
+Tutor Mode: By selecting the "Tutor Me" button, you can ask me to act as a tutor, guiding you through a topic with questions.
+Quizzing: By selecting the "Quiz Me" button, I can ask you questions to test your understanding of the material.
+
+Request for a Specific Example: This prompt will ask you to provide an example of a concept, or I might offer to provide one.
+
+You can click on a button below or type in a question/comment to continue the conversation and explore the topic further.`,
     };
     const chatLog = document.getElementById("chat-log");
     const form = document.getElementById("chat-form");
@@ -2571,6 +2591,24 @@ ${knowledgeBase}
       button.addEventListener("click", () => copyMessageContent(contentEl, button));
     }
 
+    function addStaticBotReply(text) {
+      const {
+        contentEl,
+        ttsButton,
+        followupContainer,
+        videoContainer,
+        videoToggle,
+      } = addBotMessage(text);
+      setTtsButtonText(ttsButton, text);
+      renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      if (text) {
+        messages.push({ role: "assistant", content: text });
+        logToFirebase("assistant", text);
+      }
+      followupContainer?.classList.add("hidden");
+      return { contentEl, ttsButton, followupContainer };
+    }
+
     const initialCopyButton = chatLog.querySelector("[data-role='copy-button']");
     const initialContent = chatLog.querySelector("[data-role='bot-content']");
     if (initialCopyButton && initialContent) {
@@ -2580,9 +2618,22 @@ ${knowledgeBase}
     const introPromptButtons = document.querySelectorAll("[data-role='intro-prompt']");
     introPromptButtons.forEach((button) => {
       button.addEventListener("click", () => {
+        const responseId = button.dataset.responseId || "";
+        if (responseId && INTRO_PROMPT_RESPONSES[responseId]) {
+          clearFollowupSuggestions();
+          const userText = button.textContent?.trim() || "";
+          if (userText) {
+            lastUserPrompt = userText;
+            addUserMessage(userText);
+            logToFirebase("user", userText);
+            messages.push({ role: "user", content: userText });
+          }
+          addStaticBotReply(INTRO_PROMPT_RESPONSES[responseId]);
+          return;
+        }
         const prompt = button.dataset.prompt || button.textContent || "";
         if (!prompt.trim()) return;
-        handleUserMessage(prompt);
+        handleUserMessage(prompt, { skipVideoRecommendations: true });
       });
     });
 
@@ -3383,7 +3434,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       return { assistantText: mainText, followups, video };
     }
 
-    async function streamAssistantResponse() {
+    async function streamAssistantResponse({ allowVideoRecommendations = true } = {}) {
       const {
         contentEl: botContentEl,
         ttsButton,
@@ -3397,16 +3448,20 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         contentEl: botContentEl,
         ttsButton,
       });
-      const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
-      const fallbackVideoMatch =
-        assistantText || lastUserPrompt
-          ? findBestVideoMatch(`${lastUserPrompt}\n${assistantText}`)
-          : null;
-      renderVideoRecommendation({
-        video: modelVideoMatch || fallbackVideoMatch,
-        videoContainer,
-        videoToggle,
-      });
+      if (allowVideoRecommendations) {
+        const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
+        const fallbackVideoMatch =
+          assistantText || lastUserPrompt
+            ? findBestVideoMatch(`${lastUserPrompt}\n${assistantText}`)
+            : null;
+        renderVideoRecommendation({
+          video: modelVideoMatch || fallbackVideoMatch,
+          videoContainer,
+          videoToggle,
+        });
+      } else {
+        renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      }
       if (assistantText && autoTtsEnabled) {
         await playTtsForText(assistantText, ttsButton, botContentEl);
       }
@@ -3856,7 +3911,10 @@ Do not include the correct answer or any extra text.`;
     }
 
     // Unified user message handler (text or speech)
-    async function handleUserMessage(userText, { triggeredBySpeech = false } = {}) {
+    async function handleUserMessage(
+      userText,
+      { triggeredBySpeech = false, skipVideoRecommendations = false } = {}
+    ) {
       errorSpan.textContent = "";
       clearFollowupSuggestions();
       const cleanedText = userText.trim();
@@ -3927,7 +3985,9 @@ Do not include the correct answer or any extra text.`;
 
       // Backend Call with streaming
       try {
-        const { assistantReply, followups, followupContainer } = await streamAssistantResponse();
+        const { assistantReply, followups, followupContainer } = await streamAssistantResponse({
+          allowVideoRecommendations: !skipVideoRecommendations,
+        });
         if (assistantReply) {
           messages.push({ role: "assistant", content: assistantReply });
           logToFirebase("assistant", assistantReply);
