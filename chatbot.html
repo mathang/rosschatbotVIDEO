@@ -566,24 +566,24 @@
       male: "am_fenrir",
     };
     const INTRO_PROMPT_RESPONSES = {
-      "intro-usage": `I am designed to help you learn the material in the SPX102 Introduction to Coaching course. I can speak to you if you click the speaker icon next to my response, and you can speak to me by clicking the microphone button either as a once off question "push to talk mode) or as a conversation (continuous mode).
+      "intro-usage": `I am designed to help you learn the material in the **SPX102 Introduction to Coaching** course.
 
-You can also upload PDF documents to me if you want me to read something (please respect copyright!) related to the course.
+**Speak & listen**
+- Click the **speaker icon** next to my response to hear me read it aloud.
+- Click the **microphone** to talk to me using **Push-to-talk** (one-off question) or **Continuous** mode (conversation).
 
-I can answer your questions based on the course material, and I can also help you engage with the material in different ways.
+**Upload PDFs**
+- You can upload PDFs for me to read (please **respect copyright**).
 
-Here are some ways you can use me:
+**Ways you can use me**
+- **Ask questions** about the course content. If your question includes a **keyword** from a recorded lecture, I will show you the relevant video section.
+- **Request explanations** in simpler terms or ask for an **example**.
+- **Get narratives or stories** related to the course material.
+- Use **Tutor Mode** by clicking **Tutor Me** to be guided with questions.
+- Use **Quiz Me** to test your understanding.
+- Click **Provide an Example** to ask for a specific example.
 
-Ask questions: You can ask me specific questions about the course content, and I will do my best to answer them using the information I have. If the question includes a  keyword from a recorded lecture I will show you the video of that section.
-Request explanations: If you find a concept difficult, you can ask me to explain it in simpler terms or provide an example.
-Get narratives and stories: I can generate short stories or poems related to the course content.
-
-Tutor Mode: By selecting the "Tutor Me" button, you can ask me to act as a tutor, guiding you through a topic with questions.
-Quizzing: By selecting the "Quiz Me" button, I can ask you questions to test your understanding of the material.
-
-Request for a Specific Example: This prompt will ask you to provide an example of a concept, or I might offer to provide one.
-
-You can click on a button below or type in a question/comment to continue the conversation and explore the topic further.`,
+You can click a button below or type a question to continue.`,
     };
     const chatLog = document.getElementById("chat-log");
     const form = document.getElementById("chat-form");
@@ -2591,7 +2591,7 @@ ${knowledgeBase}
       button.addEventListener("click", () => copyMessageContent(contentEl, button));
     }
 
-    function addStaticBotReply(text) {
+    function addStaticBotReply(text, options = {}) {
       const {
         contentEl,
         ttsButton,
@@ -2601,6 +2601,23 @@ ${knowledgeBase}
       } = addBotMessage(text);
       setTtsButtonText(ttsButton, text);
       renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      if (options.introButtons?.length) {
+        const buttonGroup = document.createElement("div");
+        buttonGroup.className = "mt-3 flex flex-wrap gap-2";
+        options.introButtons.forEach((introButton) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className =
+            "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
+          button.textContent = introButton.label;
+          button.addEventListener("click", () => {
+            if (!introButton.prompt?.trim()) return;
+            handleUserMessage(introButton.prompt, { skipVideoRecommendations: true });
+          });
+          buttonGroup.appendChild(button);
+        });
+        contentEl.appendChild(buttonGroup);
+      }
       if (text) {
         messages.push({ role: "assistant", content: text });
         logToFirebase("assistant", text);
@@ -2628,7 +2645,18 @@ ${knowledgeBase}
             logToFirebase("user", userText);
             messages.push({ role: "user", content: userText });
           }
-          addStaticBotReply(INTRO_PROMPT_RESPONSES[responseId]);
+          addStaticBotReply(INTRO_PROMPT_RESPONSES[responseId], {
+            introButtons: [
+              {
+                label: "What do we learn in this course?",
+                prompt: "Concisely explain the content covered in each week of the course",
+              },
+              {
+                label: "What are the assessment tasks?",
+                prompt: "Provide detailed explanation of the assessment tasks that are included in this course",
+              },
+            ],
+          });
           return;
         }
         const prompt = button.dataset.prompt || button.textContent || "";
