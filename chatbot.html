@@ -418,6 +418,29 @@
             <p>Hello! I'm your AI assistant for <span class="text-[#0052C4] font-semibold">SPX102 INTRODUCTION TO COACHING</span>.</p>
             <br>
             <p>I can help you understand coaching pedagogy, training principles and other aspects of your course. What should we discuss?</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]"
+                data-role="intro-prompt"
+                data-prompt="Concisely explain the content covered in each week of the course">
+                What do we learn in this course?
+              </button>
+              <button
+                type="button"
+                class="followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]"
+                data-role="intro-prompt"
+                data-prompt="Provide detailed explanation of the assessment tasks that are included in this course">
+                What are the assessment tasks?
+              </button>
+              <button
+                type="button"
+                class="followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]"
+                data-role="intro-prompt"
+                data-response-id="intro-usage">
+                How do I use you?
+              </button>
+            </div>
           </div>
           <div data-role="followup-container" class="mt-3 flex flex-wrap gap-2 hidden"></div>
         </div>
@@ -541,6 +564,26 @@
     const HF_TTS_VOICES = {
       female: "af_heart",
       male: "am_fenrir",
+    };
+    const INTRO_PROMPT_RESPONSES = {
+      "intro-usage": `I am designed to help you learn the material in the **SPX102 Introduction to Coaching** course.
+
+**Speak & listen**
+- Click the **speaker icon** next to my response to hear me read it aloud.
+- Click the **microphone** to talk to me using **Push-to-talk** (one-off question) or **Continuous** mode (conversation).
+
+**Upload PDFs**
+- You can upload PDFs for me to read (please **respect copyright**).
+
+**Ways you can use me**
+- **Ask questions** about the course content. If your question includes a **keyword** from a recorded lecture, I will show you the relevant video section.
+- **Request explanations** in simpler terms or ask for an **example**.
+- **Get narratives or stories** related to the course material.
+- Use **Tutor Mode** by clicking **Tutor Me** to be guided with questions.
+- Use **Quiz Me** to test your understanding.
+- Click **Provide an Example** to ask for a specific example.
+
+You can click a button below or type a question to continue.`,
     };
     const chatLog = document.getElementById("chat-log");
     const form = document.getElementById("chat-form");
@@ -2548,12 +2591,79 @@ ${knowledgeBase}
       button.addEventListener("click", () => copyMessageContent(contentEl, button));
     }
 
+    function addStaticBotReply(text, options = {}) {
+      const {
+        contentEl,
+        ttsButton,
+        followupContainer,
+        videoContainer,
+        videoToggle,
+      } = addBotMessage(text);
+      setTtsButtonText(ttsButton, text);
+      renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      if (options.introButtons?.length) {
+        const buttonGroup = document.createElement("div");
+        buttonGroup.className = "mt-3 flex flex-wrap gap-2";
+        options.introButtons.forEach((introButton) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className =
+            "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
+          button.textContent = introButton.label;
+          button.addEventListener("click", () => {
+            if (!introButton.prompt?.trim()) return;
+            handleUserMessage(introButton.prompt, { skipVideoRecommendations: true });
+          });
+          buttonGroup.appendChild(button);
+        });
+        contentEl.appendChild(buttonGroup);
+      }
+      if (text) {
+        messages.push({ role: "assistant", content: text });
+        logToFirebase("assistant", text);
+      }
+      followupContainer?.classList.add("hidden");
+      return { contentEl, ttsButton, followupContainer };
+    }
+
     const initialCopyButton = chatLog.querySelector("[data-role='copy-button']");
     const initialContent = chatLog.querySelector("[data-role='bot-content']");
     if (initialCopyButton && initialContent) {
       setCopyButtonState(initialCopyButton, "idle");
       wireCopyButton(initialCopyButton, initialContent);
     }
+    const introPromptButtons = document.querySelectorAll("[data-role='intro-prompt']");
+    introPromptButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const responseId = button.dataset.responseId || "";
+        if (responseId && INTRO_PROMPT_RESPONSES[responseId]) {
+          clearFollowupSuggestions();
+          const userText = button.textContent?.trim() || "";
+          if (userText) {
+            lastUserPrompt = userText;
+            addUserMessage(userText);
+            logToFirebase("user", userText);
+            messages.push({ role: "user", content: userText });
+          }
+          addStaticBotReply(INTRO_PROMPT_RESPONSES[responseId], {
+            introButtons: [
+              {
+                label: "What do we learn in this course?",
+                prompt: "Concisely explain the content covered in each week of the course",
+              },
+              {
+                label: "What are the assessment tasks?",
+                prompt: "Provide detailed explanation of the assessment tasks that are included in this course",
+              },
+            ],
+          });
+          return;
+        }
+        const prompt = button.dataset.prompt || button.textContent || "";
+        if (!prompt.trim()) return;
+        handleUserMessage(prompt, { skipVideoRecommendations: true });
+      });
+    });
 
     function setTtsButtonState(button, state) {
       button.dataset.state = state;
@@ -3352,7 +3462,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       return { assistantText: mainText, followups, video };
     }
 
-    async function streamAssistantResponse() {
+    async function streamAssistantResponse({ allowVideoRecommendations = true } = {}) {
       const {
         contentEl: botContentEl,
         ttsButton,
@@ -3366,16 +3476,20 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         contentEl: botContentEl,
         ttsButton,
       });
-      const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
-      const fallbackVideoMatch =
-        assistantText || lastUserPrompt
-          ? findBestVideoMatch(`${lastUserPrompt}\n${assistantText}`)
-          : null;
-      renderVideoRecommendation({
-        video: modelVideoMatch || fallbackVideoMatch,
-        videoContainer,
-        videoToggle,
-      });
+      if (allowVideoRecommendations) {
+        const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
+        const fallbackVideoMatch =
+          assistantText || lastUserPrompt
+            ? findBestVideoMatch(`${lastUserPrompt}\n${assistantText}`)
+            : null;
+        renderVideoRecommendation({
+          video: modelVideoMatch || fallbackVideoMatch,
+          videoContainer,
+          videoToggle,
+        });
+      } else {
+        renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      }
       if (assistantText && autoTtsEnabled) {
         await playTtsForText(assistantText, ttsButton, botContentEl);
       }
@@ -3825,7 +3939,10 @@ Do not include the correct answer or any extra text.`;
     }
 
     // Unified user message handler (text or speech)
-    async function handleUserMessage(userText, { triggeredBySpeech = false } = {}) {
+    async function handleUserMessage(
+      userText,
+      { triggeredBySpeech = false, skipVideoRecommendations = false } = {}
+    ) {
       errorSpan.textContent = "";
       clearFollowupSuggestions();
       const cleanedText = userText.trim();
@@ -3896,7 +4013,9 @@ Do not include the correct answer or any extra text.`;
 
       // Backend Call with streaming
       try {
-        const { assistantReply, followups, followupContainer } = await streamAssistantResponse();
+        const { assistantReply, followups, followupContainer } = await streamAssistantResponse({
+          allowVideoRecommendations: !skipVideoRecommendations,
+        });
         if (assistantReply) {
           messages.push({ role: "assistant", content: assistantReply });
           logToFirebase("assistant", assistantReply);
