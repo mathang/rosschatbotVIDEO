@@ -643,10 +643,12 @@ You can click a button below or type a question to continue. Try something like 
     let narrativeModeEnabled = false;
     let narrativeModeInFlight = false;
     let tutorModeEnabled = false;
-    let showVideosEnabled = true;
+    let showVideosEnabled = false;
     let videoMessageCounter = 0;
     const VIDEO_CALLOUT_TEXT =
       "Here’s where that concept is discussed in the online pre-recorded videos — click here to expand and play it automatically.";
+    const VIDEO_CALLOUT_TEXT_OPEN =
+      "Click here again or send another prompt/question to close the video.";
     const tutorModeSystemInstruction = `You are a Socratic tutor. Your goal is to guide me to understand the topic we are discussing.
 Do not give me direct answers. Instead, ask probing, open-ended questions one at a time.
 Wait for my response before asking the next question.
@@ -3328,16 +3330,26 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       `;
     }
 
+    function resetVideoIframe(videoContainer, video) {
+      if (!videoContainer || !video) return;
+      const iframe = videoContainer.querySelector("[data-role='video-iframe']");
+      if (iframe) {
+        iframe.src = getVideoEmbedUrl(video);
+      }
+    }
+
     function handleVideoCalloutClick({ videoContainer, video }) {
       if (!videoContainer || !video) return;
-      showVideosEnabled = true;
+      showVideosEnabled = !showVideosEnabled;
       updateAllVideoVisibility();
-      if (videoContainer.dataset.hasVideo === "true") {
+      if (showVideosEnabled && videoContainer.dataset.hasVideo === "true") {
         scrollMessageToTop(videoContainer);
       }
       const iframe = videoContainer.querySelector("[data-role='video-iframe']");
       if (iframe) {
-        iframe.src = getVideoEmbedUrl(video, { autoplay: true });
+        iframe.src = showVideosEnabled
+          ? getVideoEmbedUrl(video, { autoplay: true })
+          : getVideoEmbedUrl(video);
       }
     }
 
@@ -3352,7 +3364,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const existingCallout = contentEl.querySelector(selector);
       const hasVideo = videoContainer.dataset.hasVideo === "true";
       const videoId = videoContainer.dataset.videoSourceId || "";
-      const shouldShowCallout = showVideosEnabled && hasVideo && videoId;
+      const shouldShowCallout = hasVideo && videoId;
       if (!shouldShowCallout) {
         existingCallout?.remove();
         return;
@@ -3368,7 +3380,8 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       callout.dataset.videoTarget = targetId;
       callout.dataset.videoId = videoId;
       callout.className = "video-callout";
-      callout.textContent = VIDEO_CALLOUT_TEXT;
+      callout.textContent = showVideosEnabled ? VIDEO_CALLOUT_TEXT_OPEN : VIDEO_CALLOUT_TEXT;
+      callout.setAttribute("aria-expanded", showVideosEnabled ? "true" : "false");
       callout.onclick = () => handleVideoCalloutClick({ videoContainer, video });
       if (!existingCallout) {
         contentEl.appendChild(callout);
@@ -3394,6 +3407,11 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           container.classList.remove("hidden");
         } else {
           container.classList.add("hidden");
+          const videoId = container.dataset.videoSourceId || "";
+          const video = videoId ? findVideoById(videoId) : null;
+          if (video) {
+            resetVideoIframe(container, video);
+          }
         }
         syncVideoCalloutForContainer(container);
       });
@@ -4037,6 +4055,8 @@ Do not include the correct answer or any extra text.`;
     ) {
       errorSpan.textContent = "";
       clearFollowupSuggestions();
+      showVideosEnabled = false;
+      updateAllVideoVisibility();
       const cleanedText = userText.trim();
       const hasPdf = Boolean(pdfAttachment);
       if (!cleanedText && !hasPdf) return;
