@@ -260,6 +260,29 @@
       height: 100%;
       border: 0;
     }
+    .video-callout {
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 82, 196, 0.35);
+      background: linear-gradient(135deg, rgba(219, 234, 254, 0.7), rgba(255, 255, 255, 0.95));
+      color: #0f172a;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .video-callout:hover {
+      border-color: rgba(0, 82, 196, 0.6);
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18);
+      transform: translateY(-1px);
+    }
+    .video-callout:focus-visible {
+      outline: 3px solid rgba(59, 130, 246, 0.6);
+      outline-offset: 2px;
+    }
     .copy-button {
       border: 1px solid rgba(148, 163, 184, 0.6);
       color: #475569;
@@ -622,6 +645,8 @@ You can click a button below or type a question to continue. Try something like 
     let tutorModeEnabled = false;
     let showVideosEnabled = true;
     let videoMessageCounter = 0;
+    const VIDEO_CALLOUT_TEXT =
+      "Here’s where that concept is discussed in the online pre-recorded videos — click here to expand and play it automatically.";
     const tutorModeSystemInstruction = `You are a Socratic tutor. Your goal is to guide me to understand the topic we are discussing.
 Do not give me direct answers. Instead, ask probing, open-ended questions one at a time.
 Wait for my response before asking the next question.
@@ -3265,11 +3290,24 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       return { ...best, score: bestScore };
     }
 
+    function getVideoEmbedUrl(video, { autoplay = false } = {}) {
+      if (!video) return "";
+      const params = new URLSearchParams();
+      if (video.startSeconds) {
+        params.set("start", `${video.startSeconds}`);
+      }
+      if (autoplay) {
+        params.set("autoplay", "1");
+      }
+      const query = params.toString();
+      const suffix = query ? `?${query}` : "";
+      return `https://www.youtube-nocookie.com/embed/${video.youtubeId}${suffix}`;
+    }
+
     function buildVideoEmbed(video) {
       if (!video) return "";
       const youtubeUrl = video.watchUrl || `https://www.youtube.com/watch?v=${video.youtubeId}`;
-      const startParam = video.startSeconds ? `?start=${video.startSeconds}` : "";
-      const embedUrl = `https://www.youtube-nocookie.com/embed/${video.youtubeId}${startParam}`;
+      const embedUrl = getVideoEmbedUrl(video);
       return `
         <div class="space-y-2">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Related video</div>
@@ -3278,6 +3316,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
               src="${embedUrl}"
               title="${escapeHtml(video.title)}"
               loading="lazy"
+              data-role="video-iframe"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowfullscreen>
             </iframe>
@@ -3287,6 +3326,53 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           </a>
         </div>
       `;
+    }
+
+    function handleVideoCalloutClick({ videoContainer, video }) {
+      if (!videoContainer || !video) return;
+      showVideosEnabled = true;
+      updateAllVideoVisibility();
+      if (videoContainer.dataset.hasVideo === "true") {
+        scrollMessageToTop(videoContainer);
+      }
+      const iframe = videoContainer.querySelector("[data-role='video-iframe']");
+      if (iframe) {
+        iframe.src = getVideoEmbedUrl(video, { autoplay: true });
+      }
+    }
+
+    function syncVideoCalloutForContainer(videoContainer) {
+      if (!videoContainer) return;
+      const contentEl = videoContainer.closest(".msg-bot")?.querySelector("[data-role='bot-content']");
+      if (!contentEl) return;
+      const targetId = videoContainer.dataset.videoId || "";
+      const selector = targetId
+        ? `[data-role='video-callout'][data-video-target='${targetId}']`
+        : "[data-role='video-callout']";
+      const existingCallout = contentEl.querySelector(selector);
+      const hasVideo = videoContainer.dataset.hasVideo === "true";
+      const videoId = videoContainer.dataset.videoSourceId || "";
+      const shouldShowCallout = showVideosEnabled && hasVideo && videoId;
+      if (!shouldShowCallout) {
+        existingCallout?.remove();
+        return;
+      }
+      const video = findVideoById(videoId);
+      if (!video) {
+        existingCallout?.remove();
+        return;
+      }
+      const callout = existingCallout || document.createElement("button");
+      callout.type = "button";
+      callout.dataset.role = "video-callout";
+      callout.dataset.videoTarget = targetId;
+      callout.dataset.videoId = videoId;
+      callout.className = "video-callout";
+      callout.textContent = VIDEO_CALLOUT_TEXT;
+      callout.onclick = () => handleVideoCalloutClick({ videoContainer, video });
+      if (!existingCallout) {
+        contentEl.appendChild(callout);
+      }
     }
 
     function updateAllVideoVisibility() {
@@ -3301,6 +3387,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         setVideoToggleState(toggle, showVideosEnabled);
         if (!hasVideo) {
           container.classList.add("hidden");
+          syncVideoCalloutForContainer(container);
           return;
         }
         if (showVideosEnabled) {
@@ -3308,6 +3395,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         } else {
           container.classList.add("hidden");
         }
+        syncVideoCalloutForContainer(container);
       });
     }
 
@@ -3323,11 +3411,13 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       if (!video) {
         videoContainer.innerHTML = "";
         videoContainer.dataset.hasVideo = "false";
+        delete videoContainer.dataset.videoSourceId;
         updateAllVideoVisibility();
         return;
       }
       videoContainer.innerHTML = buildVideoEmbed(video);
       videoContainer.dataset.hasVideo = "true";
+      videoContainer.dataset.videoSourceId = video.id;
       updateAllVideoVisibility();
     }
 
