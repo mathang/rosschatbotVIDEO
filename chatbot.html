@@ -299,6 +299,10 @@
       border-color: rgba(14, 116, 144, 0.55);
       background: rgba(224, 242, 254, 0.9);
     }
+    .discovery-mode-label {
+      color: var(--color-secondary);
+      letter-spacing: 0.08em;
+    }
     @keyframes ttsPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.08); }
@@ -384,6 +388,16 @@
                 Video recommendations
               </span>
               <span data-role="video-recommendations-status" class="text-xs text-slate-500">Off</span>
+            </button>
+          </div>
+          <div class="space-y-2">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Guided Discovery</p>
+            <button id="guided-discovery-toggle" type="button" class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0052C4]/60">
+              <span class="flex items-center gap-2">
+                <i data-lucide="compass" class="w-4 h-4"></i>
+                Guided Discovery
+              </span>
+              <span data-role="guided-discovery-status" class="text-xs text-slate-500">Off</span>
             </button>
           </div>
           <div class="space-y-2">
@@ -638,6 +652,7 @@ You can click a button below or type a question to continue. Try something like 
     const speechOptionsToggle = document.getElementById("speech-options-toggle");
     const speechOptionsPanel = document.getElementById("speech-options-panel");
     const videoRecommendationsToggle = document.getElementById("video-recommendations-toggle");
+    const guidedDiscoveryToggle = document.getElementById("guided-discovery-toggle");
     const speechEngineSelect = document.getElementById("speech-engine");
     const speechSpeedSelect = document.getElementById("speech-speed");
     const speechVoiceInputs = document.querySelectorAll("input[name='speech-voice']");
@@ -680,6 +695,7 @@ Start by asking me what I already know about the topic we are discussing.`;
     let availableVoices = [];
     let autoTtsEnabled = false;
     let pdfAttachment = null;
+    let guidedDiscoveryEnabled = sessionStorage.getItem("guided_discovery_enabled") === "true";
 
     // --- SPEECH RECOGNITION ---
     const SpeechMode = { OFF: 0, PUSH_TO_TALK: 1, CONTINUOUS: 2 };
@@ -2219,7 +2235,7 @@ TTC, TTW, AFL, Train to Compete, Train to Win, Active for Life, specialization, 
 
     // --- SYSTEM PROMPT BUILDER (Restored) ---
     function buildSystemPrompt() {
-      return `
+      const basePrompt = `
 Your role:
 - You are the SPX102 INTRODUCTION TO COACHING course chatbot. Answer only from the provided notes. You may respond in the same language the user uses to ask the question, or switch to the language the user asks you to use. 
 
@@ -2275,6 +2291,23 @@ ${formatVideoLibraryForPrompt()}
 KNOWLEDGE BASE (sole source of truth):
 ${knowledgeBase}
       `.trim();
+      if (!guidedDiscoveryEnabled) {
+        return basePrompt;
+      }
+      const guidedDiscoveryPrompt = `
+GUIDED DISCOVERY MODE (Learn About style)
+You are a guided learning tutor, not an answer engine. Default to guided discovery:
+- ORIENT (1–2 sentences): frame what kind of idea this is.
+- CORE IDEA: up to 3 short bullet points only.
+- ONE EXAMPLE: one applied example relevant to SPX102 contexts.
+- BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
+- DEPTH CHOICE: offer 2–4 next-step options and stop.
+Rules:
+- One new concept per turn maximum.
+- Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
+- If the user says “just tell me / short answer / give me the answer”, comply concisely but still include one boundary + one depth-choice.
+      `.trim();
+      return `${guidedDiscoveryPrompt}\n\n${basePrompt}`;
     }
 
     // --- UI HELPER FUNCTIONS ---
@@ -2446,6 +2479,25 @@ ${knowledgeBase}
       setToggleState(button, isActive);
     }
 
+    function setGuidedDiscoveryToggleState(button, isActive) {
+      if (!button) return;
+      button.dataset.state = isActive ? "active" : "inactive";
+      button.setAttribute("aria-pressed", isActive);
+      button.setAttribute(
+        "aria-label",
+        isActive ? "Disable guided discovery" : "Enable guided discovery"
+      );
+      button.setAttribute(
+        "title",
+        isActive ? "Disable guided discovery" : "Enable guided discovery"
+      );
+      const statusLabel = button.querySelector("[data-role='guided-discovery-status']");
+      if (statusLabel) {
+        statusLabel.textContent = isActive ? "On" : "Off";
+      }
+      setToggleState(button, isActive);
+    }
+
     function collectChatEntries() {
       const entries = [];
       chatLog.querySelectorAll(".msg-user, .msg-bot").forEach((node) => {
@@ -2535,6 +2587,9 @@ ${knowledgeBase}
     }
 
     function addBotMessage(content) {
+        const discoveryLabel = guidedDiscoveryEnabled
+          ? '<div class="discovery-mode-label text-[11px] font-semibold uppercase mb-1">Discovery Mode</div>'
+          : "";
         const div = document.createElement("div");
         div.className = "flex gap-4 animate-[slideIn_0.3s_ease-out]";
         div.innerHTML = `
@@ -2546,6 +2601,7 @@ ${knowledgeBase}
                 <div class="text-xs text-slate-500 ml-1">Ross Clark</div>
                 <div class="flex items-start gap-2">
                   <div class="msg-bot bg-white border border-slate-200 p-4 text-sm leading-relaxed shadow-sm text-slate-800">
+                      ${discoveryLabel}
                       <div data-role="bot-content">${formatMessage(content)}</div>
                       <div data-role="followup-container" class="mt-3 flex flex-wrap gap-2 hidden"></div>
                       <div data-role="video-container" class="mt-3 hidden"></div>
@@ -3085,6 +3141,15 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       ];
     }
 
+    function setGuidedDiscoveryEnabledState(isEnabled) {
+      guidedDiscoveryEnabled = Boolean(isEnabled);
+      sessionStorage.setItem("guided_discovery_enabled", guidedDiscoveryEnabled ? "true" : "false");
+      if (messages?.length && messages[0]?.role === "system") {
+        messages[0].content = buildSystemPrompt();
+      }
+      setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
+    }
+
     function updateSpeechOptionsUI() {
       if (speechSpeedSelect) {
         speechSpeedSelect.value = `${ttsSpeed}`;
@@ -3094,6 +3159,9 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       }
       if (videoRecommendationsToggle) {
         setVideoToggleState(videoRecommendationsToggle, videoRecommendationsEnabled);
+      }
+      if (guidedDiscoveryToggle) {
+        setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
       }
       speechVoiceInputs.forEach((input) => {
         input.checked = input.value === ttsVoice;
@@ -3172,6 +3240,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
     // Set initial toggle appearance
     setToggleState(clinicalToggle, focusState.clinical);
     setToggleState(sportsToggle, focusState.sports);
+    setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
 
     // Focus toggle interactions
     clinicalToggle.addEventListener("click", () => {
@@ -3185,6 +3254,12 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       setToggleState(sportsToggle, focusState.sports);
       updatePendingFocusInstruction();
     });
+
+    if (guidedDiscoveryToggle) {
+      guidedDiscoveryToggle.addEventListener("click", () => {
+        setGuidedDiscoveryEnabledState(!guidedDiscoveryEnabled);
+      });
+    }
 
     // Crisis detection
     function looksLikeCrisis(text) {
