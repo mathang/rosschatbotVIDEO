@@ -3957,12 +3957,21 @@ Do not include the correct answer or any extra text.`;
         card.className = "depth-choice-card";
         card.textContent = choice;
         card.addEventListener("click", () => {
-          handleUserMessage(choice);
+          handleUserMessage(formatDepthChoicePrompt(choice));
         });
         wrapper.appendChild(card);
       });
       container.appendChild(wrapper);
       container.classList.remove("hidden");
+    }
+
+    function formatDepthChoicePrompt(choice) {
+      const trimmed = choice.trim();
+      if (!trimmed) return "";
+      if (/[?？]\s*$/.test(trimmed)) {
+        return trimmed;
+      }
+      return `Can you explain ${trimmed}?`;
     }
 
     async function handleNarrativeModeRequest({ button, contentEl }) {
