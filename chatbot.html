@@ -702,6 +702,8 @@ Start by asking me what I already know about the topic we are discussing.`;
     let autoTtsEnabled = false;
     let pdfAttachment = null;
     let guidedDiscoveryEnabled = false;
+    let summaryDecisionPending = false;
+    let conversationSummaryText = "";
     const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
     - ORIENT (1–2 sentences): frame what kind of idea this is.
     - CORE IDEA: up to 3 short bullet points only.
@@ -2623,6 +2625,9 @@ ${knowledgeBase}
                   <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="copy-button" aria-label="Copy message text" title="Copy text">
                     <i data-lucide="copy" class="w-4 h-4"></i>
                   </button>
+                  <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="refresh-button" aria-label="Refresh conversation" title="Refresh conversation">
+                    <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                  </button>
                   <span>Copy</span>
                 </div>
             </div>
@@ -2631,6 +2636,7 @@ ${knowledgeBase}
         const contentEl = div.querySelector("[data-role='bot-content']");
         const ttsButton = div.querySelector("[data-role='tts-button']");
         const copyButton = div.querySelector("[data-role='copy-button']");
+        const refreshButton = div.querySelector("[data-role='refresh-button']");
         const depthContainer = div.querySelector("[data-role='depth-container']");
         const followupContainer = div.querySelector("[data-role='followup-container']");
         const videoContainer = div.querySelector("[data-role='video-container']");
@@ -2638,6 +2644,11 @@ ${knowledgeBase}
         videoContainer.dataset.videoId = videoId;
         ttsButton.addEventListener("click", () => handleTtsButtonClick(ttsButton));
         wireCopyButton(copyButton, contentEl);
+        if (refreshButton) {
+          refreshButton.addEventListener("click", () => {
+            resetConversation();
+          });
+        }
         lucide.createIcons();
         scrollMessageToTop(contentEl);
         return { contentEl, ttsButton, followupContainer, videoContainer, depthContainer };
@@ -3683,8 +3694,9 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const depthChoices = extractDepthChoicesFromContent(assistantContent);
       const { video } = extractVideoFromContent(assistantContent);
       if (mainText) {
-        contentEl.innerHTML = formatMessage(mainText);
-        setTtsButtonText(ttsButton, mainText);
+        const displayText = stripDepthChoicesSection(mainText);
+        contentEl.innerHTML = formatMessage(displayText);
+        setTtsButtonText(ttsButton, displayText);
       }
       return { assistantText: mainText, followups, depthChoices, video };
     }
@@ -3806,7 +3818,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       tutorModeEnabled = false;
       clearFollowupSuggestions();
       messages.push({ role: "system", content: tutorModeExitInstruction });
-      handleUserMessage(tutorModeExitPrompt);
+      requestConversationSummary("tutor");
     }
 
     function startTutorMode() {
@@ -3906,6 +3918,12 @@ Do not include the correct answer or any extra text.`;
           text: "Guided Discovery",
         },
       ];
+      if (guidedDiscoveryEnabled) {
+        fixedSuggestions.push({
+          type: "exit_discovery",
+          text: "Exit Discovery",
+        });
+      }
       fixedSuggestions.forEach((suggestion) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -3932,6 +3950,11 @@ Do not include the correct answer or any extra text.`;
             if (guidedDiscoveryEnabled) {
               handleUserMessage(guidedDiscoveryPrompt);
             }
+            return;
+          }
+          if (suggestion.type === "exit_discovery") {
+            setGuidedDiscoveryEnabledState(false);
+            requestConversationSummary("discovery");
             return;
           }
           handleUserMessage(suggestion.prompt);
@@ -3965,6 +3988,23 @@ Do not include the correct answer or any extra text.`;
       container.classList.remove("hidden");
     }
 
+    function stripDepthChoicesSection(text) {
+      if (!text) return text;
+      const lines = text.split("\n");
+      const startIndex = lines.findIndex((line) =>
+        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, "").trim())
+      );
+      if (startIndex === -1) return text;
+      let endIndex = startIndex + 1;
+      for (; endIndex < lines.length; endIndex++) {
+        const line = lines[endIndex].trim();
+        if (!line) continue;
+        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
+      }
+      const filtered = lines.slice(0, startIndex).concat(lines.slice(endIndex));
+      return filtered.join("\n").trim();
+    }
+
     function formatDepthChoicePrompt(choice) {
       const trimmed = choice.trim();
       if (!trimmed) return "";
@@ -3972,6 +4012,98 @@ Do not include the correct answer or any extra text.`;
         return trimmed;
       }
       return `Can you explain ${trimmed}?`;
+    }
+
+    function resetConversation() {
+      window.location.reload();
+    }
+
+    async function requestConversationSummary(modeLabel) {
+      const label = modeLabel ? ` (${modeLabel})` : "";
+      const summaryPrompt = `Summarize our conversation so far in 4-6 bullet points. Keep it concise and focused on the key concepts discussed${label}.`;
+      const {
+        contentEl,
+        ttsButton,
+        followupContainer,
+        videoContainer,
+        depthContainer,
+      } = addBotMessage("Summarizing our conversation...");
+      renderDepthChoices(depthContainer, []);
+      renderVideoRecommendation({ video: null, videoContainer });
+      setTyping(true);
+      awaitingResponse = true;
+      try {
+        const summaryMessages = [...messages, { role: "user", content: summaryPrompt }];
+        const { assistantText } = await streamAssistantResponseInto({
+          messagesToSend: summaryMessages,
+          contentEl,
+          ttsButton,
+          expectFollowups: false,
+          renderWhileStreaming: false,
+        });
+        conversationSummaryText = assistantText || "";
+        summaryDecisionPending = true;
+        const summaryOutput = conversationSummaryText || "I couldn't generate a summary just now.";
+        contentEl.innerHTML = formatMessage(
+          `${summaryOutput}\n\nWould you like to continue this conversation or start a new one?`
+        );
+        setTtsButtonText(ttsButton, summaryOutput);
+        renderSummaryActions(followupContainer);
+      } catch (err) {
+        console.error(err);
+        conversationSummaryText = "";
+        summaryDecisionPending = true;
+        const fallbackText =
+          "Sorry, I couldn't summarize the conversation just now. Would you like to continue or start a new one?";
+        contentEl.innerHTML = formatMessage(fallbackText);
+        setTtsButtonText(ttsButton, fallbackText);
+        renderSummaryActions(followupContainer);
+      } finally {
+        awaitingResponse = false;
+        setTyping(false);
+      }
+    }
+
+    function renderSummaryActions(container) {
+      if (!container) return;
+      container.innerHTML = "";
+      const continueButton = document.createElement("button");
+      continueButton.type = "button";
+      continueButton.className =
+        "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
+      continueButton.textContent = "Continue Conversation";
+      continueButton.addEventListener("click", () => {
+        handleSummaryDecision("continue");
+      });
+      const newButton = document.createElement("button");
+      newButton.type = "button";
+      newButton.className =
+        "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
+      newButton.textContent = "Start New Conversation";
+      newButton.addEventListener("click", () => {
+        handleSummaryDecision("start new");
+      });
+      container.appendChild(continueButton);
+      container.appendChild(newButton);
+      container.classList.remove("hidden");
+    }
+
+    function handleSummaryDecision(rawText) {
+      const text = rawText.toLowerCase().trim();
+      summaryDecisionPending = false;
+      if (text.includes("start")) {
+        resetConversation();
+        return true;
+      }
+      if (text.includes("continue")) {
+        const prompt = conversationSummaryText
+          ? `${conversationSummaryText}\n\nuse this summary to start a new conversation with me`
+          : "use this summary to start a new conversation with me";
+        conversationSummaryText = "";
+        handleUserMessage(prompt);
+        return true;
+      }
+      return false;
     }
 
     async function handleNarrativeModeRequest({ button, contentEl }) {
@@ -4226,6 +4358,11 @@ Do not include the correct answer or any extra text.`;
       const cleanedText = userText.trim();
       const hasPdf = Boolean(pdfAttachment);
       if (!cleanedText && !hasPdf) return;
+      if (summaryDecisionPending && cleanedText) {
+        if (handleSummaryDecision(cleanedText)) {
+          return;
+        }
+      }
       const fallbackPrompt = cleanedText || "Please review the attached PDF.";
       lastUserPrompt = fallbackPrompt;
       const narrativeUserInstruction =
