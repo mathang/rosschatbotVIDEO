@@ -312,6 +312,13 @@
       font-size: 0.75rem;
       font-weight: 600;
       box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .depth-choice-card:hover {
+      border-color: rgba(0, 82, 196, 0.5);
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+      transform: translateY(-1px);
     }
     @keyframes ttsPulse {
       0%, 100% { transform: scale(1); }
@@ -705,7 +712,7 @@ Start by asking me what I already know about the topic we are discussing.`;
     let availableVoices = [];
     let autoTtsEnabled = false;
     let pdfAttachment = null;
-    let guidedDiscoveryEnabled = sessionStorage.getItem("guided_discovery_enabled") === "true";
+    let guidedDiscoveryEnabled = false;
 
     // --- SPEECH RECOGNITION ---
     const SpeechMode = { OFF: 0, PUSH_TO_TALK: 1, CONTINUOUS: 2 };
@@ -3957,9 +3964,13 @@ Do not include the correct answer or any extra text.`;
       const wrapper = document.createElement("div");
       wrapper.className = "flex flex-wrap gap-2";
       choices.forEach((choice) => {
-        const card = document.createElement("div");
+        const card = document.createElement("button");
+        card.type = "button";
         card.className = "depth-choice-card";
         card.textContent = choice;
+        card.addEventListener("click", () => {
+          handleUserMessage(choice);
+        });
         wrapper.appendChild(card);
       });
       container.appendChild(wrapper);
@@ -4211,6 +4222,7 @@ Do not include the correct answer or any extra text.`;
       userText,
       { triggeredBySpeech = false, skipVideoRecommendations = false } = {}
     ) {
+      syncGuidedDiscoveryPrompt();
       errorSpan.textContent = "";
       clearFollowupSuggestions();
       showVideosEnabled = false;
