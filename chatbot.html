@@ -3330,11 +3330,11 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       `;
     }
 
-    function resetVideoIframe(videoContainer, video) {
-      if (!videoContainer || !video) return;
+    function stopVideoPlayback(videoContainer) {
+      if (!videoContainer) return;
       const iframe = videoContainer.querySelector("[data-role='video-iframe']");
       if (iframe) {
-        iframe.src = getVideoEmbedUrl(video);
+        iframe.src = "about:blank";
       }
     }
 
@@ -3349,7 +3349,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       if (iframe) {
         iframe.src = showVideosEnabled
           ? getVideoEmbedUrl(video, { autoplay: true })
-          : getVideoEmbedUrl(video);
+          : "about:blank";
       }
     }
 
@@ -3407,11 +3407,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           container.classList.remove("hidden");
         } else {
           container.classList.add("hidden");
-          const videoId = container.dataset.videoSourceId || "";
-          const video = videoId ? findVideoById(videoId) : null;
-          if (video) {
-            resetVideoIframe(container, video);
-          }
+          stopVideoPlayback(container);
         }
         syncVideoCalloutForContainer(container);
       });
