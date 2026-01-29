@@ -260,6 +260,29 @@
       height: 100%;
       border: 0;
     }
+    .video-callout {
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 82, 196, 0.35);
+      background: linear-gradient(135deg, rgba(219, 234, 254, 0.7), rgba(255, 255, 255, 0.95));
+      color: #0f172a;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .video-callout:hover {
+      border-color: rgba(0, 82, 196, 0.6);
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18);
+      transform: translateY(-1px);
+    }
+    .video-callout:focus-visible {
+      outline: 3px solid rgba(59, 130, 246, 0.6);
+      outline-offset: 2px;
+    }
     .copy-button {
       border: 1px solid rgba(148, 163, 184, 0.6);
       color: #475569;
@@ -348,11 +371,21 @@
         <span>Download Chat</span>
       </button>
       <div class="relative">
-        <button id="speech-options-toggle" class="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-[#0052C4] border border-[#0052C4]/40 hover:border-[#0052C4] bg-white rounded-full shadow-sm transition-colors" type="button" aria-label="Speech options">
+        <button id="speech-options-toggle" class="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-[#0052C4] border border-[#0052C4]/40 hover:border-[#0052C4] bg-white rounded-full shadow-sm transition-colors" type="button" aria-label="Options">
           <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-          <span>Speech options</span>
+          <span>Options</span>
         </button>
         <div id="speech-options-panel" class="hidden absolute right-0 mt-3 w-64 rounded-2xl border border-slate-200 bg-white shadow-lg p-4 space-y-4 z-30">
+          <div class="space-y-2">
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Related videos</p>
+            <button id="video-recommendations-toggle" type="button" class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0052C4]/60">
+              <span class="flex items-center gap-2">
+                <i data-lucide="video" class="w-4 h-4"></i>
+                Video recommendations
+              </span>
+              <span data-role="video-recommendations-status" class="text-xs text-slate-500">Off</span>
+            </button>
+          </div>
           <div class="space-y-2">
             <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Speech engine</p>
             <select id="speech-engine" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0052C4]/40">
@@ -570,7 +603,7 @@
 
 **Type, Speak and/or listen**
 - You can type questions for me to answer just like a standard chatbot (or ChatGPT)  
-- You can also click the **speaker icon** next to my response to hear me read it aloud, and choose the voice and speed under the **Speech Options** button in the top right corner.
+- You can also click the **speaker icon** next to my response to hear me read it aloud, and choose the voice and speed under the **Options** button in the top right corner.
 - You can also talk directly to me instead of typing. Click the **microphone** to talk to me using **Push-to-talk** (one-off question) or **Continuous** mode (conversation). If you use Continuous mode with my voice turned on we can have a back and forth conversation without the need to type anything in. Just say what you want me to think about, then wait a couple of seconds, and you'll see me create the prompt and come up with a response. This can be a great way to get assistance in the background while you are working on your assignment (just have me open in another tab or on your phone and ask away!).
 
 **Upload PDFs related to the course - and download PDFs of our chat**
@@ -604,6 +637,7 @@ You can click a button below or type a question to continue. Try something like 
     const downloadBtn = document.getElementById("download-chat");
     const speechOptionsToggle = document.getElementById("speech-options-toggle");
     const speechOptionsPanel = document.getElementById("speech-options-panel");
+    const videoRecommendationsToggle = document.getElementById("video-recommendations-toggle");
     const speechEngineSelect = document.getElementById("speech-engine");
     const speechSpeedSelect = document.getElementById("speech-speed");
     const speechVoiceInputs = document.querySelectorAll("input[name='speech-voice']");
@@ -620,8 +654,13 @@ You can click a button below or type a question to continue. Try something like 
     let narrativeModeEnabled = false;
     let narrativeModeInFlight = false;
     let tutorModeEnabled = false;
-    let showVideosEnabled = true;
+    let showVideosEnabled = false;
+    let videoRecommendationsEnabled = true;
     let videoMessageCounter = 0;
+    const VIDEO_CALLOUT_TEXT =
+      "Here’s where that concept is discussed in the online pre-recorded videos — click here to expand and play it automatically.";
+    const VIDEO_CALLOUT_TEXT_OPEN =
+      "Click here again or send another prompt/question to close the video.";
     const tutorModeSystemInstruction = `You are a Socratic tutor. Your goal is to guide me to understand the topic we are discussing.
 Do not give me direct answers. Instead, ask probing, open-ended questions one at a time.
 Wait for my response before asking the next question.
@@ -2395,8 +2434,15 @@ ${knowledgeBase}
       if (!button) return;
       button.dataset.state = isActive ? "active" : "inactive";
       button.setAttribute("aria-pressed", isActive);
-      button.setAttribute("aria-label", isActive ? "Hide related video" : "Show related video");
-      button.setAttribute("title", isActive ? "Hide video" : "Show video");
+      button.setAttribute(
+        "aria-label",
+        isActive ? "Disable related videos" : "Enable related videos"
+      );
+      button.setAttribute("title", isActive ? "Disable related videos" : "Enable related videos");
+      const statusLabel = button.querySelector("[data-role='video-recommendations-status']");
+      if (statusLabel) {
+        statusLabel.textContent = isActive ? "On" : "Off";
+      }
       setToggleState(button, isActive);
     }
 
@@ -2515,15 +2561,6 @@ ${knowledgeBase}
                       disabled>
                       <i data-lucide="volume-2" class="w-4 h-4"></i>
                     </button>
-                    <button
-                      type="button"
-                      class="video-toggle-button h-9 w-9 rounded-full flex items-center justify-center shadow-sm"
-                      data-role="video-toggle"
-                      data-state="inactive"
-                      aria-label="Show related video"
-                      title="Show video">
-                      <i data-lucide="video" class="w-4 h-4"></i>
-                    </button>
                   </div>
                 </div>
                 <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
@@ -2540,15 +2577,13 @@ ${knowledgeBase}
         const copyButton = div.querySelector("[data-role='copy-button']");
         const followupContainer = div.querySelector("[data-role='followup-container']");
         const videoContainer = div.querySelector("[data-role='video-container']");
-        const videoToggle = div.querySelector("[data-role='video-toggle']");
         const videoId = `video-${videoMessageCounter++}`;
         videoContainer.dataset.videoId = videoId;
-        videoToggle.dataset.videoTarget = videoId;
         ttsButton.addEventListener("click", () => handleTtsButtonClick(ttsButton));
         wireCopyButton(copyButton, contentEl);
         lucide.createIcons();
         scrollMessageToTop(contentEl);
-        return { contentEl, ttsButton, followupContainer, videoContainer, videoToggle };
+        return { contentEl, ttsButton, followupContainer, videoContainer };
     }
 
     function setCopyButtonState(button, state) {
@@ -2599,10 +2634,9 @@ ${knowledgeBase}
         ttsButton,
         followupContainer,
         videoContainer,
-        videoToggle,
       } = addBotMessage(text);
       setTtsButtonText(ttsButton, text);
-      renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+      renderVideoRecommendation({ video: null, videoContainer });
       if (options.introButtons?.length) {
         const buttonGroup = document.createElement("div");
         buttonGroup.className = "mt-3 flex flex-wrap gap-2";
@@ -3058,6 +3092,9 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       if (speechEngineSelect) {
         speechEngineSelect.value = ttsEngine;
       }
+      if (videoRecommendationsToggle) {
+        setVideoToggleState(videoRecommendationsToggle, videoRecommendationsEnabled);
+      }
       speechVoiceInputs.forEach((input) => {
         input.checked = input.value === ttsVoice;
         input.disabled = ttsEngine !== "huggingface";
@@ -3265,11 +3302,24 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       return { ...best, score: bestScore };
     }
 
+    function getVideoEmbedUrl(video, { autoplay = false } = {}) {
+      if (!video) return "";
+      const params = new URLSearchParams();
+      if (video.startSeconds) {
+        params.set("start", `${video.startSeconds}`);
+      }
+      if (autoplay) {
+        params.set("autoplay", "1");
+      }
+      const query = params.toString();
+      const suffix = query ? `?${query}` : "";
+      return `https://www.youtube-nocookie.com/embed/${video.youtubeId}${suffix}`;
+    }
+
     function buildVideoEmbed(video) {
       if (!video) return "";
       const youtubeUrl = video.watchUrl || `https://www.youtube.com/watch?v=${video.youtubeId}`;
-      const startParam = video.startSeconds ? `?start=${video.startSeconds}` : "";
-      const embedUrl = `https://www.youtube-nocookie.com/embed/${video.youtubeId}${startParam}`;
+      const embedUrl = getVideoEmbedUrl(video);
       return `
         <div class="space-y-2">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Related video</div>
@@ -3278,6 +3328,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
               src="${embedUrl}"
               title="${escapeHtml(video.title)}"
               loading="lazy"
+              data-role="video-iframe"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowfullscreen>
             </iframe>
@@ -3289,45 +3340,96 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       `;
     }
 
+    function stopVideoPlayback(videoContainer) {
+      if (!videoContainer) return;
+      const iframe = videoContainer.querySelector("[data-role='video-iframe']");
+      if (iframe) {
+        iframe.src = "about:blank";
+      }
+    }
+
+    function handleVideoCalloutClick({ videoContainer, video }) {
+      if (!videoContainer || !video) return;
+      showVideosEnabled = !showVideosEnabled;
+      updateAllVideoVisibility();
+      if (showVideosEnabled && videoContainer.dataset.hasVideo === "true") {
+        scrollMessageToTop(videoContainer);
+      }
+      const iframe = videoContainer.querySelector("[data-role='video-iframe']");
+      if (iframe) {
+        iframe.src = showVideosEnabled
+          ? getVideoEmbedUrl(video, { autoplay: true })
+          : "about:blank";
+      }
+    }
+
+    function syncVideoCalloutForContainer(videoContainer) {
+      if (!videoContainer) return;
+      const contentEl = videoContainer.closest(".msg-bot")?.querySelector("[data-role='bot-content']");
+      if (!contentEl) return;
+      const targetId = videoContainer.dataset.videoId || "";
+      const selector = targetId
+        ? `[data-role='video-callout'][data-video-target='${targetId}']`
+        : "[data-role='video-callout']";
+      const existingCallout = contentEl.querySelector(selector);
+      const hasVideo = videoContainer.dataset.hasVideo === "true";
+      const videoId = videoContainer.dataset.videoSourceId || "";
+      const shouldShowCallout = videoRecommendationsEnabled && hasVideo && videoId;
+      if (!shouldShowCallout) {
+        existingCallout?.remove();
+        return;
+      }
+      const video = findVideoById(videoId);
+      if (!video) {
+        existingCallout?.remove();
+        return;
+      }
+      const callout = existingCallout || document.createElement("button");
+      callout.type = "button";
+      callout.dataset.role = "video-callout";
+      callout.dataset.videoTarget = targetId;
+      callout.dataset.videoId = videoId;
+      callout.className = "video-callout";
+      callout.textContent = showVideosEnabled ? VIDEO_CALLOUT_TEXT_OPEN : VIDEO_CALLOUT_TEXT;
+      callout.setAttribute("aria-expanded", showVideosEnabled ? "true" : "false");
+      callout.onclick = () => handleVideoCalloutClick({ videoContainer, video });
+      if (!existingCallout) {
+        contentEl.appendChild(callout);
+      }
+    }
+
     function updateAllVideoVisibility() {
-      document.querySelectorAll("[data-role='video-toggle']").forEach((toggle) => {
-        const targetId = toggle.dataset.videoTarget;
-        if (!targetId) return;
-        const container = document.querySelector(
-          `[data-role='video-container'][data-video-id='${targetId}']`
-        );
-        if (!container) return;
+      setVideoToggleState(videoRecommendationsToggle, videoRecommendationsEnabled);
+      document.querySelectorAll("[data-role='video-container']").forEach((container) => {
         const hasVideo = container.dataset.hasVideo === "true";
-        setVideoToggleState(toggle, showVideosEnabled);
-        if (!hasVideo) {
+        if (!videoRecommendationsEnabled || !hasVideo) {
           container.classList.add("hidden");
+          stopVideoPlayback(container);
+          syncVideoCalloutForContainer(container);
           return;
         }
         if (showVideosEnabled) {
           container.classList.remove("hidden");
         } else {
           container.classList.add("hidden");
+          stopVideoPlayback(container);
         }
+        syncVideoCalloutForContainer(container);
       });
     }
 
-    function renderVideoRecommendation({ video, videoContainer, videoToggle }) {
-      if (!videoContainer || !videoToggle) return;
-      videoToggle.onclick = () => {
-        showVideosEnabled = !showVideosEnabled;
-        updateAllVideoVisibility();
-        if (showVideosEnabled && videoContainer.dataset.hasVideo === "true") {
-          scrollMessageToTop(videoContainer);
-        }
-      };
-      if (!video) {
+    function renderVideoRecommendation({ video, videoContainer }) {
+      if (!videoContainer) return;
+      if (!video || !videoRecommendationsEnabled) {
         videoContainer.innerHTML = "";
         videoContainer.dataset.hasVideo = "false";
+        delete videoContainer.dataset.videoSourceId;
         updateAllVideoVisibility();
         return;
       }
       videoContainer.innerHTML = buildVideoEmbed(video);
       videoContainer.dataset.hasVideo = "true";
+      videoContainer.dataset.videoSourceId = video.id;
       updateAllVideoVisibility();
     }
 
@@ -3470,7 +3572,6 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         ttsButton,
         followupContainer,
         videoContainer,
-        videoToggle,
       } = addBotMessage("");
       ttsButton.dataset.userPrompt = lastUserPrompt;
       const { assistantText, followups, video } = await streamAssistantResponseInto({
@@ -3478,7 +3579,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         contentEl: botContentEl,
         ttsButton,
       });
-      if (allowVideoRecommendations) {
+      if (allowVideoRecommendations && videoRecommendationsEnabled) {
         const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
         const fallbackVideoMatch =
           assistantText || lastUserPrompt
@@ -3487,10 +3588,9 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         renderVideoRecommendation({
           video: modelVideoMatch || fallbackVideoMatch,
           videoContainer,
-          videoToggle,
         });
       } else {
-        renderVideoRecommendation({ video: null, videoContainer, videoToggle });
+        renderVideoRecommendation({ video: null, videoContainer });
       }
       if (assistantText && autoTtsEnabled) {
         await playTtsForText(assistantText, ttsButton, botContentEl);
@@ -3947,6 +4047,8 @@ Do not include the correct answer or any extra text.`;
     ) {
       errorSpan.textContent = "";
       clearFollowupSuggestions();
+      showVideosEnabled = false;
+      updateAllVideoVisibility();
       const cleanedText = userText.trim();
       const hasPdf = Boolean(pdfAttachment);
       if (!cleanedText && !hasPdf) return;
@@ -4112,6 +4214,12 @@ Do not include the correct answer or any extra text.`;
 
     speechOptionsToggle?.addEventListener("click", () => {
       speechOptionsPanel?.classList.toggle("hidden");
+    });
+
+    videoRecommendationsToggle?.addEventListener("click", () => {
+      videoRecommendationsEnabled = !videoRecommendationsEnabled;
+      showVideosEnabled = false;
+      updateAllVideoVisibility();
     });
 
     document.addEventListener("click", (event) => {
