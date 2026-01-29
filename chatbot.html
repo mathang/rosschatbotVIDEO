@@ -299,6 +299,27 @@
       border-color: rgba(14, 116, 144, 0.55);
       background: rgba(224, 242, 254, 0.9);
     }
+    .discovery-mode-label {
+      color: var(--color-secondary);
+      letter-spacing: 0.08em;
+    }
+    .depth-choice-card {
+      border: 1px solid rgba(0, 82, 196, 0.2);
+      background: linear-gradient(135deg, rgba(219, 234, 254, 0.7), rgba(255, 255, 255, 0.95));
+      color: #0f172a;
+      border-radius: 14px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .depth-choice-card:hover {
+      border-color: rgba(0, 82, 196, 0.5);
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+      transform: translateY(-1px);
+    }
     @keyframes ttsPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.08); }
@@ -680,6 +701,17 @@ Start by asking me what I already know about the topic we are discussing.`;
     let availableVoices = [];
     let autoTtsEnabled = false;
     let pdfAttachment = null;
+    let guidedDiscoveryEnabled = false;
+    const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
+    - ORIENT (1–2 sentences): frame what kind of idea this is.
+    - CORE IDEA: up to 3 short bullet points only.
+    - ONE EXAMPLE: one applied example relevant to SPX102 contexts.
+    - BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
+    - DEPTH CHOICE: offer 2–4 next-step options and stop.
+    Rules:
+    - One new concept per turn maximum.
+    - Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
+Ask the student what they want to learn about, then follow this new method.`;
 
     // --- SPEECH RECOGNITION ---
     const SpeechMode = { OFF: 0, PUSH_TO_TALK: 1, CONTINUOUS: 2 };
@@ -2287,10 +2319,17 @@ ${knowledgeBase}
     }
 
     function applyInlineFormatting(text) {
-      const cleaned = text
+      let cleaned = text
         .replace(/<br\s*\/?>/gi, " ")
         .replace(/\u00a0|&nbsp;/gi, " ")
         .replace(/\s{2,}/g, " ");
+      if (guidedDiscoveryEnabled) {
+        cleaned = cleaned
+          .replace(/core idea/gi, "CORE PRINCIPLE")
+          .replace(/one example/gi, "PRACTICAL EXAMPLE")
+          .replace(/boundary\/contrast/gi, "WHAT TO AVOID")
+          .replace(/depth choice/gi, "GOING DEEPER");
+      }
       const escaped = escapeHtml(cleaned);
       const bolded = escaped.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
       const italicized = bolded.replace(/\*([^*]+)\*/g, "<em>$1</em>");
@@ -2446,6 +2485,25 @@ ${knowledgeBase}
       setToggleState(button, isActive);
     }
 
+    function setGuidedDiscoveryToggleState(button, isActive) {
+      if (!button) return;
+      button.dataset.state = isActive ? "active" : "inactive";
+      button.setAttribute("aria-pressed", isActive);
+      button.setAttribute(
+        "aria-label",
+        isActive ? "Disable guided discovery" : "Enable guided discovery"
+      );
+      button.setAttribute(
+        "title",
+        isActive ? "Disable guided discovery" : "Enable guided discovery"
+      );
+      const statusLabel = button.querySelector("[data-role='guided-discovery-status']");
+      if (statusLabel) {
+        statusLabel.textContent = isActive ? "On" : "Off";
+      }
+      setToggleState(button, isActive);
+    }
+
     function collectChatEntries() {
       const entries = [];
       chatLog.querySelectorAll(".msg-user, .msg-bot").forEach((node) => {
@@ -2535,6 +2593,9 @@ ${knowledgeBase}
     }
 
     function addBotMessage(content) {
+        const discoveryLabel = guidedDiscoveryEnabled
+          ? '<div class="discovery-mode-label text-[11px] font-semibold uppercase mb-1">Discovery Mode</div>'
+          : "";
         const div = document.createElement("div");
         div.className = "flex gap-4 animate-[slideIn_0.3s_ease-out]";
         div.innerHTML = `
@@ -2546,7 +2607,9 @@ ${knowledgeBase}
                 <div class="text-xs text-slate-500 ml-1">Ross Clark</div>
                 <div class="flex items-start gap-2">
                   <div class="msg-bot bg-white border border-slate-200 p-4 text-sm leading-relaxed shadow-sm text-slate-800">
+                      ${discoveryLabel}
                       <div data-role="bot-content">${formatMessage(content)}</div>
+                      <div data-role="depth-container" class="mt-3 hidden"></div>
                       <div data-role="followup-container" class="mt-3 flex flex-wrap gap-2 hidden"></div>
                       <div data-role="video-container" class="mt-3 hidden"></div>
                   </div>
@@ -2564,6 +2627,9 @@ ${knowledgeBase}
                   </div>
                 </div>
                 <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                  <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="refresh-button" aria-label="Refresh conversation" title="Refresh conversation">
+                    <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                  </button>
                   <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="copy-button" aria-label="Copy message text" title="Copy text">
                     <i data-lucide="copy" class="w-4 h-4"></i>
                   </button>
@@ -2575,15 +2641,22 @@ ${knowledgeBase}
         const contentEl = div.querySelector("[data-role='bot-content']");
         const ttsButton = div.querySelector("[data-role='tts-button']");
         const copyButton = div.querySelector("[data-role='copy-button']");
+        const refreshButton = div.querySelector("[data-role='refresh-button']");
+        const depthContainer = div.querySelector("[data-role='depth-container']");
         const followupContainer = div.querySelector("[data-role='followup-container']");
         const videoContainer = div.querySelector("[data-role='video-container']");
         const videoId = `video-${videoMessageCounter++}`;
         videoContainer.dataset.videoId = videoId;
         ttsButton.addEventListener("click", () => handleTtsButtonClick(ttsButton));
         wireCopyButton(copyButton, contentEl);
+        if (refreshButton) {
+          refreshButton.addEventListener("click", () => {
+            resetConversation();
+          });
+        }
         lucide.createIcons();
         scrollMessageToTop(contentEl);
-        return { contentEl, ttsButton, followupContainer, videoContainer };
+        return { contentEl, ttsButton, followupContainer, videoContainer, depthContainer };
     }
 
     function setCopyButtonState(button, state) {
@@ -3085,6 +3158,10 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       ];
     }
 
+    function setGuidedDiscoveryEnabledState(isEnabled) {
+      guidedDiscoveryEnabled = Boolean(isEnabled);
+    }
+
     function updateSpeechOptionsUI() {
       if (speechSpeedSelect) {
         speechSpeedSelect.value = `${ttsSpeed}`;
@@ -3213,6 +3290,8 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         FOLLOWUP_MARKERS.end,
         VIDEO_MARKERS.start,
         VIDEO_MARKERS.end,
+        "<<<DEPTH_CHOICES>>>",
+        "<<<END_DEPTH_CHOICES>>>",
       ];
       const markerIndexes = markers
         .map((token) => rawText.indexOf(token))
@@ -3272,6 +3351,65 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       } catch (err) {
         return { video: null };
       }
+    }
+
+    function extractDepthChoicesFromContent(rawText) {
+      const startToken = "<<<DEPTH_CHOICES>>>";
+      const endToken = "<<<END_DEPTH_CHOICES>>>";
+      const startIndex = rawText.indexOf(startToken);
+      if (startIndex === -1) {
+        const visibleText = getVisibleAssistantContent(rawText);
+        return extractDepthChoicesFromText(visibleText);
+      }
+      const endIndex = rawText.indexOf(endToken, startIndex + startToken.length);
+      if (endIndex === -1) return [];
+      const jsonBlock = rawText
+        .slice(startIndex + startToken.length, endIndex)
+        .trim()
+        .replace(/^```(?:json)?/i, "")
+        .replace(/```$/i, "")
+        .trim();
+      try {
+        const parsed = JSON.parse(jsonBlock);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .map((item) =>
+            typeof item === "string"
+              ? item.trim()
+              : (item?.text || item?.label || "").toString().trim()
+          )
+          .filter(Boolean)
+          .slice(0, 4);
+      } catch (err) {
+        return extractDepthChoicesFromText(getVisibleAssistantContent(rawText));
+      }
+    }
+
+    function extractDepthChoicesFromText(text) {
+      if (!text) return [];
+      const lines = text.split("\n").map((line) => line.trim());
+      const startIndex = lines.findIndex((line) =>
+        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, ""))
+      );
+      if (startIndex === -1) return [];
+      const choices = [];
+      for (let i = startIndex + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) {
+          if (choices.length) break;
+          continue;
+        }
+        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
+        const bulletMatch = line.match(/^[-*•]\s+(.*)/);
+        const numberedMatch = line.match(/^\d+\.\s+(.*)/);
+        const choice = bulletMatch?.[1] || numberedMatch?.[1];
+        if (choice) {
+          choices.push(choice.trim());
+        } else if (choices.length) {
+          break;
+        }
+      }
+      return choices.filter(Boolean).slice(0, 4);
     }
 
     function findVideoById(videoId) {
@@ -3558,12 +3696,14 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const { followups } = expectFollowups
         ? extractFollowupsFromContent(assistantContent)
         : { followups: [] };
+      const depthChoices = extractDepthChoicesFromContent(assistantContent);
       const { video } = extractVideoFromContent(assistantContent);
       if (mainText) {
-        contentEl.innerHTML = formatMessage(mainText);
-        setTtsButtonText(ttsButton, mainText);
+        const displayText = stripDepthChoicesSection(mainText);
+        contentEl.innerHTML = formatMessage(displayText);
+        setTtsButtonText(ttsButton, displayText);
       }
-      return { assistantText: mainText, followups, video };
+      return { assistantText: mainText, followups, depthChoices, video };
     }
 
     async function streamAssistantResponse({ allowVideoRecommendations = true } = {}) {
@@ -3572,13 +3712,15 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         ttsButton,
         followupContainer,
         videoContainer,
+        depthContainer,
       } = addBotMessage("");
       ttsButton.dataset.userPrompt = lastUserPrompt;
-      const { assistantText, followups, video } = await streamAssistantResponseInto({
+        const { assistantText, followups, depthChoices, video } = await streamAssistantResponseInto({
         messagesToSend: messages,
         contentEl: botContentEl,
         ttsButton,
       });
+      renderDepthChoices(depthContainer, depthChoices);
       if (allowVideoRecommendations && videoRecommendationsEnabled) {
         const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
         const fallbackVideoMatch =
@@ -3681,7 +3823,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       tutorModeEnabled = false;
       clearFollowupSuggestions();
       messages.push({ role: "system", content: tutorModeExitInstruction });
-      handleUserMessage(tutorModeExitPrompt);
+      requestConversationSummary("tutor");
     }
 
     function startTutorMode() {
@@ -3776,13 +3918,28 @@ Do not include the correct answer or any extra text.`;
           type: "tutor",
           text: "Tutor Me",
         },
+        {
+          type: "discovery",
+          text: "Guided Discovery",
+        },
       ];
+      if (guidedDiscoveryEnabled) {
+        fixedSuggestions.push({
+          type: "exit_discovery",
+          text: "Exit Discovery",
+        });
+      }
       fixedSuggestions.forEach((suggestion) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className =
           "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
         button.textContent = suggestion.text;
+        if (suggestion.type === "discovery") {
+          button.setAttribute("aria-pressed", guidedDiscoveryEnabled);
+          button.classList.toggle("ring-2", guidedDiscoveryEnabled);
+          button.classList.toggle("ring-[var(--color-secondary)]", guidedDiscoveryEnabled);
+        }
         button.addEventListener("click", () => {
           clearFollowupSuggestions();
           if (suggestion.type === "quiz") {
@@ -3793,10 +3950,133 @@ Do not include the correct answer or any extra text.`;
             startTutorMode();
             return;
           }
+          if (suggestion.type === "discovery") {
+            setGuidedDiscoveryEnabledState(!guidedDiscoveryEnabled);
+            if (guidedDiscoveryEnabled) {
+              handleUserMessage(guidedDiscoveryPrompt);
+            }
+            return;
+          }
+          if (suggestion.type === "exit_discovery") {
+            setGuidedDiscoveryEnabledState(false);
+            requestConversationSummary("discovery");
+            return;
+          }
           handleUserMessage(suggestion.prompt);
         });
         container.appendChild(button);
       });
+      container.classList.remove("hidden");
+    }
+
+    function renderDepthChoices(container, choices) {
+      if (!container) return;
+      if (!Array.isArray(choices) || choices.length === 0) {
+        container.innerHTML = "";
+        container.classList.add("hidden");
+        return;
+      }
+      container.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex flex-wrap gap-2";
+      choices.forEach((choice) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "depth-choice-card";
+        card.textContent = choice;
+        card.addEventListener("click", () => {
+          handleUserMessage(formatDepthChoicePrompt(choice));
+        });
+        wrapper.appendChild(card);
+      });
+      container.appendChild(wrapper);
+      container.classList.remove("hidden");
+    }
+
+    function stripDepthChoicesSection(text) {
+      if (!text) return text;
+      const lines = text.split("\n");
+      const startIndex = lines.findIndex((line) =>
+        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, "").trim())
+      );
+      if (startIndex === -1) return text;
+      let endIndex = startIndex + 1;
+      for (; endIndex < lines.length; endIndex++) {
+        const line = lines[endIndex].trim();
+        if (!line) continue;
+        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
+      }
+      const filtered = lines.slice(0, startIndex).concat(lines.slice(endIndex));
+      return filtered.join("\n").trim();
+    }
+
+    function formatDepthChoicePrompt(choice) {
+      const trimmed = choice.trim();
+      if (!trimmed) return "";
+      if (/[?？]\s*$/.test(trimmed)) {
+        return trimmed;
+      }
+      return `Can you explain ${trimmed}?`;
+    }
+
+    function resetConversation() {
+      window.location.reload();
+    }
+
+    async function requestConversationSummary(modeLabel) {
+      const label = modeLabel ? ` (${modeLabel})` : "";
+      const summaryPrompt = `Summarize our conversation so far in 4-6 bullet points. Keep it concise and focused on the key concepts discussed${label}.`;
+      const {
+        contentEl,
+        ttsButton,
+        followupContainer,
+        videoContainer,
+        depthContainer,
+      } = addBotMessage("Summarizing our conversation...");
+      renderDepthChoices(depthContainer, []);
+      renderVideoRecommendation({ video: null, videoContainer });
+      setTyping(true);
+      awaitingResponse = true;
+      try {
+        const summaryMessages = [...messages, { role: "user", content: summaryPrompt }];
+        const { assistantText } = await streamAssistantResponseInto({
+          messagesToSend: summaryMessages,
+          contentEl,
+          ttsButton,
+          expectFollowups: false,
+          renderWhileStreaming: false,
+        });
+        const summaryOutput = assistantText || "I couldn't generate a summary just now.";
+        contentEl.innerHTML = formatMessage(
+          `${summaryOutput}\n\nI hope this conversation was helpful. If you want to keep it, please download a copy before clicking **START NEW CONVERSATION**.`
+        );
+        setTtsButtonText(ttsButton, summaryOutput);
+        renderSummaryActions(followupContainer);
+      } catch (err) {
+        console.error(err);
+        const fallbackText =
+          "Sorry, I couldn't summarize the conversation just now. I hope this conversation was helpful. If you want to keep it, please download a copy before clicking **START NEW CONVERSATION**.";
+        contentEl.innerHTML = formatMessage(fallbackText);
+        setTtsButtonText(ttsButton, fallbackText);
+        renderSummaryActions(followupContainer);
+      } finally {
+        awaitingResponse = false;
+        setTyping(false);
+      }
+    }
+
+    function renderSummaryActions(container) {
+      if (!container) return;
+      container.innerHTML = "";
+      const newButton = document.createElement("button");
+      newButton.type = "button";
+      newButton.className =
+        "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
+      newButton.textContent = "START NEW CONVERSATION";
+      newButton.addEventListener("click", () => {
+        resetConversation();
+      });
+      container.appendChild(newButton);
       container.classList.remove("hidden");
     }
 
@@ -4061,7 +4341,11 @@ Do not include the correct answer or any extra text.`;
 
       const focusPrefix = pendingFocusInstruction ? `${pendingFocusInstruction}. ` : "";
       const narrativePrefix = narrativeModeEnabled ? `${narrativeUserInstruction} ` : "";
-      const messageToSend = `${focusPrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
+      const discoveryPrefix =
+        guidedDiscoveryEnabled && fallbackPrompt !== guidedDiscoveryPrompt
+          ? `${guidedDiscoveryPrompt}\n\n`
+          : "";
+      const messageToSend = `${discoveryPrefix}${focusPrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
       pendingFocusInstruction = "";
 
       const userLogText = cleanedText || "PDF attached.";
