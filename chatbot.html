@@ -2233,9 +2233,23 @@ TTC, TTW, AFL, Train to Compete, Train to Win, Active for Life, specialization, 
 
  `.trim();
 
+    const guidedDiscoveryPrompt = `
+GUIDED DISCOVERY MODE (Learn About style)
+You are a guided learning tutor, not an answer engine. Default to guided discovery:
+- ORIENT (1–2 sentences): frame what kind of idea this is.
+- CORE IDEA: up to 3 short bullet points only.
+- ONE EXAMPLE: one applied example relevant to SPX102 contexts.
+- BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
+- DEPTH CHOICE: offer 2–4 next-step options and stop.
+Rules:
+- One new concept per turn maximum.
+- Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
+- If the user says “just tell me / short answer / give me the answer”, comply concisely but still include one boundary + one depth-choice.
+    `.trim();
+
     // --- SYSTEM PROMPT BUILDER (Restored) ---
     function buildSystemPrompt() {
-      const basePrompt = `
+      return `
 Your role:
 - You are the SPX102 INTRODUCTION TO COACHING course chatbot. Answer only from the provided notes. You may respond in the same language the user uses to ask the question, or switch to the language the user asks you to use. 
 
@@ -2291,23 +2305,6 @@ ${formatVideoLibraryForPrompt()}
 KNOWLEDGE BASE (sole source of truth):
 ${knowledgeBase}
       `.trim();
-      if (!guidedDiscoveryEnabled) {
-        return basePrompt;
-      }
-      const guidedDiscoveryPrompt = `
-GUIDED DISCOVERY MODE (Learn About style)
-You are a guided learning tutor, not an answer engine. Default to guided discovery:
-- ORIENT (1–2 sentences): frame what kind of idea this is.
-- CORE IDEA: up to 3 short bullet points only.
-- ONE EXAMPLE: one applied example relevant to SPX102 contexts.
-- BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
-- DEPTH CHOICE: offer 2–4 next-step options and stop.
-Rules:
-- One new concept per turn maximum.
-- Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
-- If the user says “just tell me / short answer / give me the answer”, comply concisely but still include one boundary + one depth-choice.
-      `.trim();
-      return `${guidedDiscoveryPrompt}\n\n${basePrompt}`;
     }
 
     // --- UI HELPER FUNCTIONS ---
@@ -3139,15 +3136,38 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           content: buildSystemPrompt(),
         },
       ];
+      syncGuidedDiscoveryPrompt();
     }
 
     function setGuidedDiscoveryEnabledState(isEnabled) {
       guidedDiscoveryEnabled = Boolean(isEnabled);
       sessionStorage.setItem("guided_discovery_enabled", guidedDiscoveryEnabled ? "true" : "false");
-      if (messages?.length && messages[0]?.role === "system") {
-        messages[0].content = buildSystemPrompt();
-      }
+      syncGuidedDiscoveryPrompt();
       setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
+    }
+
+    function hasGuidedDiscoveryPrompt() {
+      return messages.some(
+        (message) =>
+          message.role === "system" &&
+          message.content?.trim().startsWith("GUIDED DISCOVERY MODE")
+      );
+    }
+
+    function syncGuidedDiscoveryPrompt() {
+      if (guidedDiscoveryEnabled) {
+        if (!hasGuidedDiscoveryPrompt()) {
+          messages.unshift({ role: "system", content: guidedDiscoveryPrompt });
+        }
+        return;
+      }
+      messages = messages.filter(
+        (message) =>
+          !(
+            message.role === "system" &&
+            message.content?.trim().startsWith("GUIDED DISCOVERY MODE")
+          )
+      );
     }
 
     function updateSpeechOptionsUI() {
