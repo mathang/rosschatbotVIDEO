@@ -644,6 +644,7 @@ You can click a button below or type a question to continue. Try something like 
     let narrativeModeInFlight = false;
     let tutorModeEnabled = false;
     let showVideosEnabled = false;
+    let videoRecommendationsEnabled = true;
     let videoMessageCounter = 0;
     const VIDEO_CALLOUT_TEXT =
       "Here’s where that concept is discussed in the online pre-recorded videos — click here to expand and play it automatically.";
@@ -2422,8 +2423,11 @@ ${knowledgeBase}
       if (!button) return;
       button.dataset.state = isActive ? "active" : "inactive";
       button.setAttribute("aria-pressed", isActive);
-      button.setAttribute("aria-label", isActive ? "Hide related video" : "Show related video");
-      button.setAttribute("title", isActive ? "Hide video" : "Show video");
+      button.setAttribute(
+        "aria-label",
+        isActive ? "Disable related videos" : "Enable related videos"
+      );
+      button.setAttribute("title", isActive ? "Disable related videos" : "Enable related videos");
       setToggleState(button, isActive);
     }
 
@@ -3364,7 +3368,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const existingCallout = contentEl.querySelector(selector);
       const hasVideo = videoContainer.dataset.hasVideo === "true";
       const videoId = videoContainer.dataset.videoSourceId || "";
-      const shouldShowCallout = hasVideo && videoId;
+      const shouldShowCallout = videoRecommendationsEnabled && hasVideo && videoId;
       if (!shouldShowCallout) {
         existingCallout?.remove();
         return;
@@ -3397,9 +3401,10 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         );
         if (!container) return;
         const hasVideo = container.dataset.hasVideo === "true";
-        setVideoToggleState(toggle, showVideosEnabled);
-        if (!hasVideo) {
+        setVideoToggleState(toggle, videoRecommendationsEnabled);
+        if (!videoRecommendationsEnabled || !hasVideo) {
           container.classList.add("hidden");
+          stopVideoPlayback(container);
           syncVideoCalloutForContainer(container);
           return;
         }
@@ -3416,13 +3421,14 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
     function renderVideoRecommendation({ video, videoContainer, videoToggle }) {
       if (!videoContainer || !videoToggle) return;
       videoToggle.onclick = () => {
-        showVideosEnabled = !showVideosEnabled;
+        videoRecommendationsEnabled = !videoRecommendationsEnabled;
+        showVideosEnabled = false;
         updateAllVideoVisibility();
         if (showVideosEnabled && videoContainer.dataset.hasVideo === "true") {
           scrollMessageToTop(videoContainer);
         }
       };
-      if (!video) {
+      if (!video || !videoRecommendationsEnabled) {
         videoContainer.innerHTML = "";
         videoContainer.dataset.hasVideo = "false";
         delete videoContainer.dataset.videoSourceId;
@@ -3582,7 +3588,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         contentEl: botContentEl,
         ttsButton,
       });
-      if (allowVideoRecommendations) {
+      if (allowVideoRecommendations && videoRecommendationsEnabled) {
         const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
         const fallbackVideoMatch =
           assistantText || lastUserPrompt
