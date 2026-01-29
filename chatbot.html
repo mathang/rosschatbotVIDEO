@@ -702,8 +702,6 @@ Start by asking me what I already know about the topic we are discussing.`;
     let autoTtsEnabled = false;
     let pdfAttachment = null;
     let guidedDiscoveryEnabled = false;
-    let summaryDecisionPending = false;
-    let conversationSummaryText = "";
     const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
     - ORIENT (1–2 sentences): frame what kind of idea this is.
     - CORE IDEA: up to 3 short bullet points only.
@@ -2622,11 +2620,11 @@ ${knowledgeBase}
                   </div>
                 </div>
                 <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                  <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="copy-button" aria-label="Copy message text" title="Copy text">
-                    <i data-lucide="copy" class="w-4 h-4"></i>
-                  </button>
                   <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="refresh-button" aria-label="Refresh conversation" title="Refresh conversation">
                     <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                  </button>
+                  <button type="button" class="copy-button inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm" data-role="copy-button" aria-label="Copy message text" title="Copy text">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
                   </button>
                   <span>Copy</span>
                 </div>
@@ -4041,20 +4039,16 @@ Do not include the correct answer or any extra text.`;
           expectFollowups: false,
           renderWhileStreaming: false,
         });
-        conversationSummaryText = assistantText || "";
-        summaryDecisionPending = true;
-        const summaryOutput = conversationSummaryText || "I couldn't generate a summary just now.";
+        const summaryOutput = assistantText || "I couldn't generate a summary just now.";
         contentEl.innerHTML = formatMessage(
-          `${summaryOutput}\n\nWould you like to continue this conversation or start a new one?`
+          `${summaryOutput}\n\nI hope this conversation was helpful. If you want to keep it, please download a copy before clicking **START NEW CONVERSATION**.`
         );
         setTtsButtonText(ttsButton, summaryOutput);
         renderSummaryActions(followupContainer);
       } catch (err) {
         console.error(err);
-        conversationSummaryText = "";
-        summaryDecisionPending = true;
         const fallbackText =
-          "Sorry, I couldn't summarize the conversation just now. Would you like to continue or start a new one?";
+          "Sorry, I couldn't summarize the conversation just now. I hope this conversation was helpful. If you want to keep it, please download a copy before clicking **START NEW CONVERSATION**.";
         contentEl.innerHTML = formatMessage(fallbackText);
         setTtsButtonText(ttsButton, fallbackText);
         renderSummaryActions(followupContainer);
@@ -4067,43 +4061,16 @@ Do not include the correct answer or any extra text.`;
     function renderSummaryActions(container) {
       if (!container) return;
       container.innerHTML = "";
-      const continueButton = document.createElement("button");
-      continueButton.type = "button";
-      continueButton.className =
-        "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
-      continueButton.textContent = "Continue Conversation";
-      continueButton.addEventListener("click", () => {
-        handleSummaryDecision("continue");
-      });
       const newButton = document.createElement("button");
       newButton.type = "button";
       newButton.className =
         "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
-      newButton.textContent = "Start New Conversation";
+      newButton.textContent = "START NEW CONVERSATION";
       newButton.addEventListener("click", () => {
-        handleSummaryDecision("start new");
+        resetConversation();
       });
-      container.appendChild(continueButton);
       container.appendChild(newButton);
       container.classList.remove("hidden");
-    }
-
-    function handleSummaryDecision(rawText) {
-      const text = rawText.toLowerCase().trim();
-      summaryDecisionPending = false;
-      if (text.includes("start")) {
-        resetConversation();
-        return true;
-      }
-      if (text.includes("continue")) {
-        const prompt = conversationSummaryText
-          ? `${conversationSummaryText}\n\nuse this summary to start a new conversation with me`
-          : "use this summary to start a new conversation with me";
-        conversationSummaryText = "";
-        handleUserMessage(prompt);
-        return true;
-      }
-      return false;
     }
 
     async function handleNarrativeModeRequest({ button, contentEl }) {
@@ -4358,11 +4325,6 @@ Do not include the correct answer or any extra text.`;
       const cleanedText = userText.trim();
       const hasPdf = Boolean(pdfAttachment);
       if (!cleanedText && !hasPdf) return;
-      if (summaryDecisionPending && cleanedText) {
-        if (handleSummaryDecision(cleanedText)) {
-          return;
-        }
-      }
       const fallbackPrompt = cleanedText || "Please review the attached PDF.";
       lastUserPrompt = fallbackPrompt;
       const narrativeUserInstruction =
