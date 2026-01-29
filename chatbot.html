@@ -303,6 +303,16 @@
       color: var(--color-secondary);
       letter-spacing: 0.08em;
     }
+    .depth-choice-card {
+      border: 1px solid rgba(0, 82, 196, 0.2);
+      background: linear-gradient(135deg, rgba(219, 234, 254, 0.7), rgba(255, 255, 255, 0.95));
+      color: #0f172a;
+      border-radius: 14px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+    }
     @keyframes ttsPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.08); }
@@ -2245,6 +2255,11 @@ Rules:
 - One new concept per turn maximum.
 - Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
 - If the user says “just tell me / short answer / give me the answer”, comply concisely but still include one boundary + one depth-choice.
+After the main response, include depth choices as JSON between the markers:
+<<<DEPTH_CHOICES>>>
+["Option 1","Option 2"]
+<<<END_DEPTH_CHOICES>>>
+Put depth-choice markers before any follow-up markers.
     `.trim();
 
     // --- SYSTEM PROMPT BUILDER (Restored) ---
@@ -2600,6 +2615,7 @@ ${knowledgeBase}
                   <div class="msg-bot bg-white border border-slate-200 p-4 text-sm leading-relaxed shadow-sm text-slate-800">
                       ${discoveryLabel}
                       <div data-role="bot-content">${formatMessage(content)}</div>
+                      <div data-role="depth-container" class="mt-3 hidden"></div>
                       <div data-role="followup-container" class="mt-3 flex flex-wrap gap-2 hidden"></div>
                       <div data-role="video-container" class="mt-3 hidden"></div>
                   </div>
@@ -2628,6 +2644,7 @@ ${knowledgeBase}
         const contentEl = div.querySelector("[data-role='bot-content']");
         const ttsButton = div.querySelector("[data-role='tts-button']");
         const copyButton = div.querySelector("[data-role='copy-button']");
+        const depthContainer = div.querySelector("[data-role='depth-container']");
         const followupContainer = div.querySelector("[data-role='followup-container']");
         const videoContainer = div.querySelector("[data-role='video-container']");
         const videoId = `video-${videoMessageCounter++}`;
@@ -2636,7 +2653,7 @@ ${knowledgeBase}
         wireCopyButton(copyButton, contentEl);
         lucide.createIcons();
         scrollMessageToTop(contentEl);
-        return { contentEl, ttsButton, followupContainer, videoContainer };
+        return { contentEl, ttsButton, followupContainer, videoContainer, depthContainer };
     }
 
     function setCopyButtonState(button, state) {
@@ -3308,6 +3325,8 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         FOLLOWUP_MARKERS.end,
         VIDEO_MARKERS.start,
         VIDEO_MARKERS.end,
+        "<<<DEPTH_CHOICES>>>",
+        "<<<END_DEPTH_CHOICES>>>",
       ];
       const markerIndexes = markers
         .map((token) => rawText.indexOf(token))
@@ -3366,6 +3385,35 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         return { video: { id, reason: parsed?.reason?.toString().trim() || "" } };
       } catch (err) {
         return { video: null };
+      }
+    }
+
+    function extractDepthChoicesFromContent(rawText) {
+      const startToken = "<<<DEPTH_CHOICES>>>";
+      const endToken = "<<<END_DEPTH_CHOICES>>>";
+      const startIndex = rawText.indexOf(startToken);
+      if (startIndex === -1) return [];
+      const endIndex = rawText.indexOf(endToken, startIndex + startToken.length);
+      if (endIndex === -1) return [];
+      const jsonBlock = rawText
+        .slice(startIndex + startToken.length, endIndex)
+        .trim()
+        .replace(/^```(?:json)?/i, "")
+        .replace(/```$/i, "")
+        .trim();
+      try {
+        const parsed = JSON.parse(jsonBlock);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .map((item) =>
+            typeof item === "string"
+              ? item.trim()
+              : (item?.text || item?.label || "").toString().trim()
+          )
+          .filter(Boolean)
+          .slice(0, 4);
+      } catch (err) {
+        return [];
       }
     }
 
@@ -3653,12 +3701,13 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const { followups } = expectFollowups
         ? extractFollowupsFromContent(assistantContent)
         : { followups: [] };
+      const depthChoices = extractDepthChoicesFromContent(assistantContent);
       const { video } = extractVideoFromContent(assistantContent);
       if (mainText) {
         contentEl.innerHTML = formatMessage(mainText);
         setTtsButtonText(ttsButton, mainText);
       }
-      return { assistantText: mainText, followups, video };
+      return { assistantText: mainText, followups, depthChoices, video };
     }
 
     async function streamAssistantResponse({ allowVideoRecommendations = true } = {}) {
@@ -3667,13 +3716,15 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
         ttsButton,
         followupContainer,
         videoContainer,
+        depthContainer,
       } = addBotMessage("");
       ttsButton.dataset.userPrompt = lastUserPrompt;
-      const { assistantText, followups, video } = await streamAssistantResponseInto({
+        const { assistantText, followups, depthChoices, video } = await streamAssistantResponseInto({
         messagesToSend: messages,
         contentEl: botContentEl,
         ttsButton,
       });
+      renderDepthChoices(depthContainer, depthChoices);
       if (allowVideoRecommendations && videoRecommendationsEnabled) {
         const modelVideoMatch = video?.id ? findVideoById(video.id) : null;
         const fallbackVideoMatch =
@@ -3892,6 +3943,26 @@ Do not include the correct answer or any extra text.`;
         });
         container.appendChild(button);
       });
+      container.classList.remove("hidden");
+    }
+
+    function renderDepthChoices(container, choices) {
+      if (!container) return;
+      if (!Array.isArray(choices) || choices.length === 0) {
+        container.innerHTML = "";
+        container.classList.add("hidden");
+        return;
+      }
+      container.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex flex-wrap gap-2";
+      choices.forEach((choice) => {
+        const card = document.createElement("div");
+        card.className = "depth-choice-card";
+        card.textContent = choice;
+        wrapper.appendChild(card);
+      });
+      container.appendChild(wrapper);
       container.classList.remove("hidden");
     }
 
