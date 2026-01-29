@@ -408,16 +408,6 @@
             </button>
           </div>
           <div class="space-y-2">
-            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Guided Discovery</p>
-            <button id="guided-discovery-toggle" type="button" class="inline-flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#0052C4]/60">
-              <span class="flex items-center gap-2">
-                <i data-lucide="compass" class="w-4 h-4"></i>
-                Guided Discovery
-              </span>
-              <span data-role="guided-discovery-status" class="text-xs text-slate-500">Off</span>
-            </button>
-          </div>
-          <div class="space-y-2">
             <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Speech engine</p>
             <select id="speech-engine" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0052C4]/40">
               <option value="huggingface">Hugging Face (English voices)</option>
@@ -669,7 +659,6 @@ You can click a button below or type a question to continue. Try something like 
     const speechOptionsToggle = document.getElementById("speech-options-toggle");
     const speechOptionsPanel = document.getElementById("speech-options-panel");
     const videoRecommendationsToggle = document.getElementById("video-recommendations-toggle");
-    const guidedDiscoveryToggle = document.getElementById("guided-discovery-toggle");
     const speechEngineSelect = document.getElementById("speech-engine");
     const speechSpeedSelect = document.getElementById("speech-speed");
     const speechVoiceInputs = document.querySelectorAll("input[name='speech-voice']");
@@ -713,6 +702,16 @@ Start by asking me what I already know about the topic we are discussing.`;
     let autoTtsEnabled = false;
     let pdfAttachment = null;
     let guidedDiscoveryEnabled = false;
+    const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
+    - ORIENT (1–2 sentences): frame what kind of idea this is.
+    - CORE IDEA: up to 3 short bullet points only.
+    - ONE EXAMPLE: one applied example relevant to SPX102 contexts.
+    - BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
+    - DEPTH CHOICE: offer 2–4 next-step options and stop.
+    Rules:
+    - One new concept per turn maximum.
+    - Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
+Ask the student what they want to learn about, then follow this new method.`;
 
     // --- SPEECH RECOGNITION ---
     const SpeechMode = { OFF: 0, PUSH_TO_TALK: 1, CONTINUOUS: 2 };
@@ -2250,25 +2249,6 @@ TTC, TTW, AFL, Train to Compete, Train to Win, Active for Life, specialization, 
 
  `.trim();
 
-    const guidedDiscoveryPrompt = `
-GUIDED DISCOVERY MODE (Learn About style)
-You are a guided learning tutor, not an answer engine. Default to guided discovery:
-- ORIENT (1–2 sentences): frame what kind of idea this is.
-- CORE IDEA: up to 3 short bullet points only.
-- ONE EXAMPLE: one applied example relevant to SPX102 contexts.
-- BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
-- DEPTH CHOICE: offer 2–4 next-step options and stop.
-Rules:
-- One new concept per turn maximum.
-- Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
-- If the user says “just tell me / short answer / give me the answer”, comply concisely but still include one boundary + one depth-choice.
-After the main response, include depth choices as JSON between the markers:
-<<<DEPTH_CHOICES>>>
-["Option 1","Option 2"]
-<<<END_DEPTH_CHOICES>>>
-Put depth-choice markers before any follow-up markers.
-    `.trim();
-
     // --- SYSTEM PROMPT BUILDER (Restored) ---
     function buildSystemPrompt() {
       return `
@@ -3160,38 +3140,10 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           content: buildSystemPrompt(),
         },
       ];
-      syncGuidedDiscoveryPrompt();
     }
 
     function setGuidedDiscoveryEnabledState(isEnabled) {
       guidedDiscoveryEnabled = Boolean(isEnabled);
-      sessionStorage.setItem("guided_discovery_enabled", guidedDiscoveryEnabled ? "true" : "false");
-      syncGuidedDiscoveryPrompt();
-      setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
-    }
-
-    function hasGuidedDiscoveryPrompt() {
-      return messages.some(
-        (message) =>
-          message.role === "system" &&
-          message.content?.trim().startsWith("GUIDED DISCOVERY MODE")
-      );
-    }
-
-    function syncGuidedDiscoveryPrompt() {
-      if (guidedDiscoveryEnabled) {
-        if (!hasGuidedDiscoveryPrompt()) {
-          messages.unshift({ role: "system", content: guidedDiscoveryPrompt });
-        }
-        return;
-      }
-      messages = messages.filter(
-        (message) =>
-          !(
-            message.role === "system" &&
-            message.content?.trim().startsWith("GUIDED DISCOVERY MODE")
-          )
-      );
     }
 
     function updateSpeechOptionsUI() {
@@ -3203,9 +3155,6 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       }
       if (videoRecommendationsToggle) {
         setVideoToggleState(videoRecommendationsToggle, videoRecommendationsEnabled);
-      }
-      if (guidedDiscoveryToggle) {
-        setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
       }
       speechVoiceInputs.forEach((input) => {
         input.checked = input.value === ttsVoice;
@@ -3284,7 +3233,6 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
     // Set initial toggle appearance
     setToggleState(clinicalToggle, focusState.clinical);
     setToggleState(sportsToggle, focusState.sports);
-    setGuidedDiscoveryToggleState(guidedDiscoveryToggle, guidedDiscoveryEnabled);
 
     // Focus toggle interactions
     clinicalToggle.addEventListener("click", () => {
@@ -3298,12 +3246,6 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       setToggleState(sportsToggle, focusState.sports);
       updatePendingFocusInstruction();
     });
-
-    if (guidedDiscoveryToggle) {
-      guidedDiscoveryToggle.addEventListener("click", () => {
-        setGuidedDiscoveryEnabledState(!guidedDiscoveryEnabled);
-      });
-    }
 
     // Crisis detection
     function looksLikeCrisis(text) {
@@ -3399,7 +3341,10 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const startToken = "<<<DEPTH_CHOICES>>>";
       const endToken = "<<<END_DEPTH_CHOICES>>>";
       const startIndex = rawText.indexOf(startToken);
-      if (startIndex === -1) return [];
+      if (startIndex === -1) {
+        const visibleText = getVisibleAssistantContent(rawText);
+        return extractDepthChoicesFromText(visibleText);
+      }
       const endIndex = rawText.indexOf(endToken, startIndex + startToken.length);
       if (endIndex === -1) return [];
       const jsonBlock = rawText
@@ -3420,8 +3365,35 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           .filter(Boolean)
           .slice(0, 4);
       } catch (err) {
-        return [];
+        return extractDepthChoicesFromText(getVisibleAssistantContent(rawText));
       }
+    }
+
+    function extractDepthChoicesFromText(text) {
+      if (!text) return [];
+      const lines = text.split("\n").map((line) => line.trim());
+      const startIndex = lines.findIndex((line) =>
+        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, ""))
+      );
+      if (startIndex === -1) return [];
+      const choices = [];
+      for (let i = startIndex + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) {
+          if (choices.length) break;
+          continue;
+        }
+        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
+        const bulletMatch = line.match(/^[-*•]\s+(.*)/);
+        const numberedMatch = line.match(/^\d+\.\s+(.*)/);
+        const choice = bulletMatch?.[1] || numberedMatch?.[1];
+        if (choice) {
+          choices.push(choice.trim());
+        } else if (choices.length) {
+          break;
+        }
+      }
+      return choices.filter(Boolean).slice(0, 4);
     }
 
     function findVideoById(videoId) {
@@ -3929,6 +3901,10 @@ Do not include the correct answer or any extra text.`;
           type: "tutor",
           text: "Tutor Me",
         },
+        {
+          type: "discovery",
+          text: "Guided Discovery",
+        },
       ];
       fixedSuggestions.forEach((suggestion) => {
         const button = document.createElement("button");
@@ -3936,6 +3912,11 @@ Do not include the correct answer or any extra text.`;
         button.className =
           "followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]";
         button.textContent = suggestion.text;
+        if (suggestion.type === "discovery") {
+          button.setAttribute("aria-pressed", guidedDiscoveryEnabled);
+          button.classList.toggle("ring-2", guidedDiscoveryEnabled);
+          button.classList.toggle("ring-[var(--color-secondary)]", guidedDiscoveryEnabled);
+        }
         button.addEventListener("click", () => {
           clearFollowupSuggestions();
           if (suggestion.type === "quiz") {
@@ -3944,6 +3925,13 @@ Do not include the correct answer or any extra text.`;
           }
           if (suggestion.type === "tutor") {
             startTutorMode();
+            return;
+          }
+          if (suggestion.type === "discovery") {
+            setGuidedDiscoveryEnabledState(!guidedDiscoveryEnabled);
+            if (guidedDiscoveryEnabled) {
+              handleUserMessage(guidedDiscoveryPrompt);
+            }
             return;
           }
           handleUserMessage(suggestion.prompt);
@@ -4222,7 +4210,6 @@ Do not include the correct answer or any extra text.`;
       userText,
       { triggeredBySpeech = false, skipVideoRecommendations = false } = {}
     ) {
-      syncGuidedDiscoveryPrompt();
       errorSpan.textContent = "";
       clearFollowupSuggestions();
       showVideosEnabled = false;
@@ -4239,7 +4226,11 @@ Do not include the correct answer or any extra text.`;
 
       const focusPrefix = pendingFocusInstruction ? `${pendingFocusInstruction}. ` : "";
       const narrativePrefix = narrativeModeEnabled ? `${narrativeUserInstruction} ` : "";
-      const messageToSend = `${focusPrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
+      const discoveryPrefix =
+        guidedDiscoveryEnabled && fallbackPrompt !== guidedDiscoveryPrompt
+          ? `${guidedDiscoveryPrompt}\n\n`
+          : "";
+      const messageToSend = `${discoveryPrefix}${focusPrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
       pendingFocusInstruction = "";
 
       const userLogText = cleanedText || "PDF attached.";
