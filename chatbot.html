@@ -2319,10 +2319,17 @@ ${knowledgeBase}
     }
 
     function applyInlineFormatting(text) {
-      const cleaned = text
+      let cleaned = text
         .replace(/<br\s*\/?>/gi, " ")
         .replace(/\u00a0|&nbsp;/gi, " ")
         .replace(/\s{2,}/g, " ");
+      if (guidedDiscoveryEnabled) {
+        cleaned = cleaned
+          .replace(/core idea/gi, "CORE PRINCIPLE")
+          .replace(/one example/gi, "PRACTICAL EXAMPLE")
+          .replace(/boundary\/contrast/gi, "WHAT TO AVOID")
+          .replace(/depth choice/gi, "GOING DEEPER");
+      }
       const escaped = escapeHtml(cleaned);
       const bolded = escaped.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
       const italicized = bolded.replace(/\*([^*]+)\*/g, "<em>$1</em>");
