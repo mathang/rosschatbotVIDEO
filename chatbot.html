@@ -320,6 +320,17 @@
       box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
       transform: translateY(-1px);
     }
+    .response-style-button {
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      background: #ffffff;
+      color: #334155;
+      transition: all 0.2s ease;
+    }
+    .response-style-button:hover {
+      border-color: rgba(0, 82, 196, 0.6);
+      background: #eff6ff;
+      color: #0052C4;
+    }
     @keyframes ttsPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.08); }
@@ -340,6 +351,9 @@
       footer,
       #clinical-toggle,
       #sports-toggle,
+      #response-style-short,
+      #response-style-normal,
+      #response-style-long,
       .tts-button,
       .copy-button,
       #download-chat,
@@ -459,6 +473,35 @@
           <img src="./sports.png" alt="Sports focus" class="w-24 h-24 object-cover rounded-lg" />
           <span class="sr-only">Toggle sports focus</span>
         </button>
+      </div>
+      <div class="border-t border-slate-200 pt-3 space-y-2">
+        <p class="text-sm text-slate-700">Choose response style (default: Normal)</p>
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Response style">
+          <button
+            id="response-style-short"
+            type="button"
+            class="response-style-button rounded-full px-3 py-2 text-xs font-semibold shadow-sm"
+            aria-pressed="false"
+            title="Short — Concise and formal">
+            Short · Concise &amp; formal
+          </button>
+          <button
+            id="response-style-normal"
+            type="button"
+            class="response-style-button rounded-full px-3 py-2 text-xs font-semibold shadow-sm"
+            aria-pressed="true"
+            title="Normal — Friendly and descriptive">
+            Normal · Friendly &amp; descriptive
+          </button>
+          <button
+            id="response-style-long"
+            type="button"
+            class="response-style-button rounded-full px-3 py-2 text-xs font-semibold shadow-sm"
+            aria-pressed="false"
+            title="Long — Bubbly and conversational">
+            Long · Bubbly &amp; conversational
+          </button>
+        </div>
       </div>
     </section>
     
@@ -650,6 +693,9 @@ You can click a button below or type a question to continue. Try something like 
     const typingIndicator = document.getElementById("typing-indicator");
     const clinicalToggle = document.getElementById("clinical-toggle");
     const sportsToggle = document.getElementById("sports-toggle");
+    const responseStyleShortBtn = document.getElementById("response-style-short");
+    const responseStyleNormalBtn = document.getElementById("response-style-normal");
+    const responseStyleLongBtn = document.getElementById("response-style-long");
     const micBtn = document.getElementById("mic-btn");
     const micModeLabel = document.getElementById("mic-mode-label");
     const pdfBtn = document.getElementById("pdf-btn");
@@ -672,6 +718,7 @@ You can click a button below or type a question to continue. Try something like 
     let isHydratingLocalMemory = false;
     let focusState = { clinical: false, sports: false };
     let pendingFocusInstruction = "";
+    let responseStyle = "normal";
     let activeAudio = null;
     let globalAudioElement = new Audio();
     let activeTtsButton = null;
@@ -2547,6 +2594,26 @@ ${knowledgeBase}
       }
     }
 
+    function getResponseStyleInstruction() {
+      const responseStyleInstructions = {
+        short:
+          "All your responses must be as succinct as possible. Focus on minimising text when you respond.",
+        normal:
+          "Respond in a friendly and descriptive manner, balancing conciseness with details.",
+        long:
+          "Respond in an enthusiastic and friendly way with an emphasis on providing details in a helpful way.",
+      };
+
+      return responseStyleInstructions[responseStyle] || responseStyleInstructions.normal;
+    }
+
+    function setResponseStyle(nextStyle) {
+      responseStyle = nextStyle;
+      setToggleState(responseStyleShortBtn, responseStyle === "short");
+      setToggleState(responseStyleNormalBtn, responseStyle === "normal");
+      setToggleState(responseStyleLongBtn, responseStyle === "long");
+    }
+
     function formatVideoLibraryForPrompt() {
       if (!videoLibrary.length) return "No videos available.";
       return videoLibrary
@@ -3332,6 +3399,7 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
     // Set initial toggle appearance
     setToggleState(clinicalToggle, focusState.clinical);
     setToggleState(sportsToggle, focusState.sports);
+    setResponseStyle(responseStyle);
 
     // Focus toggle interactions
     clinicalToggle.addEventListener("click", () => {
@@ -3344,6 +3412,18 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       focusState.sports = !focusState.sports;
       setToggleState(sportsToggle, focusState.sports);
       updatePendingFocusInstruction();
+    });
+
+    responseStyleShortBtn.addEventListener("click", () => {
+      setResponseStyle("short");
+    });
+
+    responseStyleNormalBtn.addEventListener("click", () => {
+      setResponseStyle("normal");
+    });
+
+    responseStyleLongBtn.addEventListener("click", () => {
+      setResponseStyle("long");
     });
 
     // Crisis detection
@@ -4422,6 +4502,7 @@ Do not include the correct answer or any extra text.`;
         "You must respond in narrative format with no tables or bullet points.";
       const followupInstruction =
         "Append at least one follow-up prompt after your answer exactly as specified in the system instructions.";
+      const responseStylePrefix = `${getResponseStyleInstruction()} `;
 
       const focusPrefix = pendingFocusInstruction ? `${pendingFocusInstruction}. ` : "";
       const narrativePrefix = narrativeModeEnabled ? `${narrativeUserInstruction} ` : "";
@@ -4429,7 +4510,7 @@ Do not include the correct answer or any extra text.`;
         guidedDiscoveryEnabled && fallbackPrompt !== guidedDiscoveryPrompt
           ? `${guidedDiscoveryPrompt}\n\n`
           : "";
-      const messageToSend = `${discoveryPrefix}${focusPrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
+      const messageToSend = `${discoveryPrefix}${focusPrefix}${responseStylePrefix}${narrativePrefix}${fallbackPrompt}\n\n${followupInstruction}`.trim();
       pendingFocusInstruction = "";
 
       const userLogText = cleanedText || "PDF attached.";
