@@ -3557,12 +3557,29 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       );
     }
 
+    function normalizeDepthChoiceLine(line) {
+      if (!line) return "";
+      const trimmed = line.trim();
+      if (!trimmed) return "";
+      const bulletMatch = trimmed.match(/^[-*•]\s+(.*)/);
+      const numberedMatch = trimmed.match(/^\d+\.\s+(.*)/);
+      const letteredMatch = trimmed.match(/^[A-D]\)\s+(.*)/i);
+      const cleaned = bulletMatch?.[1] || numberedMatch?.[1] || letteredMatch?.[1] || trimmed;
+      return cleaned.trim();
+    }
+
     function extractDepthChoicesFromText(text) {
       if (!text) return [];
       const lines = text.split("\n").map((line) => line.trim());
       const startIndex = lines.findIndex((line) => isDepthChoiceHeading(line));
       if (startIndex === -1) return [];
       const choices = [];
+      const headingLine = lines[startIndex] || "";
+      const headingInlineChoice = headingLine.replace(/^[^:]+:\s*/i, "").trim();
+      if (headingInlineChoice) {
+        choices.push(normalizeDepthChoiceLine(headingInlineChoice));
+      }
+
       for (let i = startIndex + 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line) {
@@ -3570,13 +3587,11 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           continue;
         }
         if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
-        const bulletMatch = line.match(/^[-*•]\s+(.*)/);
-        const numberedMatch = line.match(/^\d+\.\s+(.*)/);
-        const letteredMatch = line.match(/^[A-D]\)\s+(.*)/i);
-        const plainChoice = /^[^:]+\?$/.test(line) ? line : "";
-        const choice = bulletMatch?.[1] || numberedMatch?.[1] || letteredMatch?.[1] || plainChoice;
+        if (isDepthChoiceHeading(line) && i !== startIndex) continue;
+
+        const choice = normalizeDepthChoiceLine(line);
         if (choice) {
-          choices.push(choice.trim());
+          choices.push(choice);
         } else if (choices.length) {
           break;
         }
@@ -4171,13 +4186,19 @@ Do not include the correct answer or any extra text.`;
       const startIndex = lines.findIndex((line) => isDepthChoiceHeading(line));
       if (startIndex === -1) return text;
       let endIndex = startIndex + 1;
+      let sawChoiceLine = false;
       for (; endIndex < lines.length; endIndex++) {
         const line = lines[endIndex].trim();
-        if (!line) continue;
-        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
-        const isListLine = /^([-*•]|\d+\.|[A-D]\))/i.test(line);
-        const looksLikeQuestionChoice = /\?$/.test(line);
-        if (!isListLine && !looksLikeQuestionChoice) break;
+        if (!line) {
+          if (sawChoiceLine) break;
+          continue;
+        }
+        if (/^[A-Z][A-Za-z\s]+:/.test(line) && !isDepthChoiceHeading(line)) break;
+        if (isDepthChoiceHeading(line)) {
+          sawChoiceLine = true;
+          continue;
+        }
+        sawChoiceLine = true;
       }
       const filtered = lines.slice(0, startIndex).concat(lines.slice(endIndex));
       return filtered.join("\n").trim();
