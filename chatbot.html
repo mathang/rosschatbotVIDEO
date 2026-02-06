@@ -574,9 +574,10 @@
       </button>
 
     </form>
-    <div class="text-center mt-2">
-       <span id="error" class="text-xs text-red-400 font-medium"></span>
-       <span class="text-[10px] text-slate-500">I can only answer questions based on the SPX102 INTRODUCTION TO COACHING notes I was given.</span>
+    <div class="text-center mt-2 space-y-1">
+       <span id="error" class="block text-xs text-red-400 font-medium"></span>
+       <span class="block text-[10px] text-slate-500">I can only answer questions based on the SPX102 INTRODUCTION TO COACHING notes I was given.</span>
+       <span class="block text-[10px] text-slate-500">Memory is saved only on this device/browser to keep conversations anonymous.</span>
     </div>
   </footer>
 
@@ -665,6 +666,10 @@ You can click a button below or type a question to continue. Try something like 
 
     // Full message history
     let messages = [];
+    const localMemoryStorageKey = "chat_local_memory_v1";
+    const maxLocalMemoryEntries = 60;
+    let localMemoryEntries = [];
+    let isHydratingLocalMemory = false;
     let focusState = { clinical: false, sports: false };
     let pendingFocusInstruction = "";
     let activeAudio = null;
@@ -2729,6 +2734,7 @@ ${knowledgeBase}
       }
       if (text) {
         messages.push({ role: "assistant", content: text });
+        addLocalMemoryEntry("assistant", text);
         logToFirebase("assistant", text);
       }
       followupContainer?.classList.add("hidden");
@@ -2753,6 +2759,7 @@ ${knowledgeBase}
             addUserMessage(userText);
             logToFirebase("user", userText);
             messages.push({ role: "user", content: userText });
+            addLocalMemoryEntry("user", userText);
           }
           addStaticBotReply(INTRO_PROMPT_RESPONSES[responseId], {
             introButtons: [
@@ -2773,6 +2780,8 @@ ${knowledgeBase}
         handleUserMessage(prompt, { skipVideoRecommendations: true });
       });
     });
+
+    hydrateConversationFromLocalMemory();
 
     function setTtsButtonState(button, state) {
       button.dataset.state = state;
@@ -3185,6 +3194,80 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       const ext = extIndex > -1 ? name.slice(extIndex) : "";
       const base = name.slice(0, maxLength - ext.length - 1);
       return `${base}…${ext}`;
+    }
+
+    function saveLocalMemory() {
+      try {
+        localStorage.setItem(
+          localMemoryStorageKey,
+          JSON.stringify({ entries: localMemoryEntries })
+        );
+      } catch (err) {
+        console.error("Failed to save local memory", err);
+      }
+    }
+
+    function normalizeMemoryContent(content) {
+      if (typeof content === "string") {
+        return content.trim();
+      }
+      if (Array.isArray(content)) {
+        const textPart = content.find((part) => part?.type === "text")?.text || "";
+        return String(textPart).trim();
+      }
+      return "";
+    }
+
+    function addLocalMemoryEntry(role, content) {
+      if (isHydratingLocalMemory) return;
+      const normalized = normalizeMemoryContent(content);
+      if (!normalized) return;
+      localMemoryEntries.push({ role, content: normalized, timestamp: Date.now() });
+      if (localMemoryEntries.length > maxLocalMemoryEntries) {
+        localMemoryEntries = localMemoryEntries.slice(-maxLocalMemoryEntries);
+      }
+      saveLocalMemory();
+    }
+
+    function loadLocalMemoryEntries() {
+      try {
+        const raw = localStorage.getItem(localMemoryStorageKey);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed?.entries)) return [];
+        return parsed.entries.filter(
+          (entry) =>
+            (entry?.role === "user" || entry?.role === "assistant") &&
+            typeof entry?.content === "string" &&
+            entry.content.trim()
+        );
+      } catch (err) {
+        console.error("Failed to load local memory", err);
+        return [];
+      }
+    }
+
+    function hydrateConversationFromLocalMemory() {
+      const entries = loadLocalMemoryEntries();
+      if (!entries.length) return;
+
+      isHydratingLocalMemory = true;
+      localMemoryEntries = entries.slice(-maxLocalMemoryEntries);
+      messages = [];
+
+      entries.forEach((entry) => {
+        if (entry.role === "user") {
+          addUserMessage(entry.content);
+          messages.push({ role: "user", content: entry.content });
+          return;
+        }
+
+        const { ttsButton } = addBotMessage(entry.content);
+        setTtsButtonText(ttsButton, entry.content);
+        messages.push({ role: "assistant", content: entry.content });
+      });
+
+      isHydratingLocalMemory = false;
     }
 
     function getSessionId() {
@@ -4020,6 +4103,7 @@ Do not include the correct answer or any extra text.`;
     }
 
     function resetConversation() {
+      localStorage.removeItem(localMemoryStorageKey);
       window.location.reload();
     }
 
@@ -4364,6 +4448,7 @@ Do not include the correct answer or any extra text.`;
           ]
         : messageToSend;
       messages.push({ role: "user", content: contentPayload }); // Update history
+      addLocalMemoryEntry("user", messageToSend);
       if (hasPdf) {
         resetPdfAttachment();
       }
@@ -4388,6 +4473,7 @@ Do not include the correct answer or any extra text.`;
             setTtsButtonText(ttsButton, supportText);
             ttsButton.dataset.userPrompt = cleanedText;
             messages.push({ role: "assistant", content: supportText });
+            addLocalMemoryEntry("assistant", supportText);
             logToFirebase("assistant", supportText);
             if (autoTtsEnabled) {
               playTtsForText(supportText, ttsButton, contentEl);
@@ -4406,6 +4492,7 @@ Do not include the correct answer or any extra text.`;
         });
         if (assistantReply) {
           messages.push({ role: "assistant", content: assistantReply });
+          addLocalMemoryEntry("assistant", assistantReply);
           logToFirebase("assistant", assistantReply);
           renderFollowupSuggestions(followupContainer, followups);
         }
