@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPX102 Check Your Understanding — LTAD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Open Sans', system-ui, sans-serif; }
+    .msg-user { border-radius: 16px 16px 4px 16px; }
+    .msg-bot { border-radius: 16px 16px 16px 4px; }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <main class="max-w-3xl mx-auto p-4 h-screen flex flex-col">
+    <header class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <h1 class="text-xl font-bold text-slate-800">SPX102 — Check Your Understanding</h1>
+      <p class="text-sm text-slate-600 mt-1">Topic: Long-Term Athlete Development (LTAD) and Periodisation</p>
+      <p class="text-xs text-slate-500 mt-2">Discovery mode is ON by default. This version excludes video playback and Tutor Me mode.</p>
+    </header>
+
+    <section id="chat-log" class="flex-1 overflow-y-auto mt-4 space-y-3 pr-1"></section>
+
+    <form id="chat-form" class="mt-4 bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+      <label for="user-input" class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Your response</label>
+      <textarea id="user-input" rows="3" class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ask a question or say 'start walkthrough'"></textarea>
+      <div class="mt-2 flex items-center justify-between">
+        <span id="error" class="text-xs text-red-600"></span>
+        <button id="send-btn" type="submit" class="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-xl">Send</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    const API_URL = "/.netlify/functions/openrouter-chat";
+
+    const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
+- ORIENT (1–2 sentences): frame what kind of idea this is.
+- CORE IDEA: up to 3 short bullet points only.
+- ONE EXAMPLE: one applied SPX102-relevant example.
+- BOUNDARY/CONTRAST: what it is not, or a common misconception.
+- DEPTH CHOICE: offer 2–4 next-step options and stop.
+Rules:
+- One new concept per turn maximum.
+- You are in check-your-understanding mode: ask one short question that checks understanding before moving to the next concept.
+- Step through the transcript in sequence unless the user asks to jump.
+- If you include information not explicitly in the provided transcript but related to it, add exactly one short note in that response: "Related note (not explicitly covered in this transcript): ...". Do not include this note more than once in the same response.
+- Use only the provided knowledge base; if unsupported, say so and pivot to the nearest supported concept.`;
+
+    const knowledgeBase = `# Transcript Knowledge Base: Week 7 LTAD and Periodisation
+
+## Introduction
+This week examines the **Long-Term Athlete Development (LTAD) framework** and introduces **periodisation** in training planning. Both concepts are essential for designing effective programs that support athletes across their lifespan and optimise performance for different goals.
+
+## Long-Term Athlete Development (LTAD)
+LTAD describes a staged approach to athlete growth and skill development, considering **biological, psychological, and social changes** across life stages.
+
+### Key Stages of LTAD
+1. **Active Start (0–6 years)**  
+   - Focus: Fundamental movement skills (running, jumping, throwing).  
+   - Play-based, fun, exploratory movement.  
+
+2. **FUNdamentals (6–9 years, girls; 6–10 years, boys)**  
+   - Build fundamental movement patterns and basic sports skills.  
+   - Speed, agility, balance, coordination emphasised.  
+   - Avoid early specialisation.  
+
+3. **Learn to Train (8–11 years, girls; 9–12 years, boys)**  
+   - Sport-specific skill development begins.  
+   - Multiple sports participation is encouraged.  
+   - Importance of skill variety and basic tactics.  
+
+4. **Train to Train (11–15 years, girls; 12–16 years, boys)**  
+   - Emphasis on aerobic fitness, strength basics, and sport-specific skills.  
+   - Periodisation begins: structured seasonal planning.  
+   - Peak Height Velocity (PHV) is a critical consideration.  
+
+5. **Train to Compete (15–21 years, depending on maturity)**  
+   - Sport-specific focus; high-intensity training.  
+   - Tactical and technical refinement.  
+   - Specialisation becomes more pronounced.  
+
+6. **Train to Win (18+ years, elite level)**  
+   - Maximise performance at international/professional levels.  
+   - Highly individualised periodisation.  
+   - Full-time training and competition.  
+
+7. **Active for Life (any age)**  
+   - Transition from competitive sport to lifelong activity.  
+   - Participation, health, and enjoyment prioritised.  
+
+## Periodisation
+Periodisation is the **systematic planning of training** to maximise performance at specific times, while managing fatigue and recovery.
+
+### Levels of Periodisation
+- **Macrocycle**: Long-term (often a year or more).  
+- **Mesocycle**: Medium-term (weeks to months), focuses on phases (e.g., preparation, competition).  
+- **Microcycle**: Short-term (usually 1 week), details day-to-day training.  
+
+### Periodisation Phases
+1. **Preparatory Phase**  
+   - General preparation: endurance, strength, basic skills.  
+   - High training volume, lower intensity.  
+2. **Pre-Competition Phase**  
+   - Increased intensity, sport-specific drills.  
+   - Reduced training volume.  
+   - Tactical preparation.  
+3. **Competition Phase**  
+   - Maintain fitness while maximising readiness.  
+   - Focus on competition performance.  
+   - Tapering before key events.  
+4. **Transition Phase**  
+   - Rest and recovery (active rest).  
+   - Mental and physical regeneration.  
+
+### Tapering
+- Reduction in training load before competition.  
+- Allows recovery and peak performance.  
+- Often 1–3 weeks depending on sport.  
+
+## Integration of LTAD and Periodisation
+- LTAD provides the **big picture** of athlete development across years.  
+- Periodisation provides the **short-term structure** to achieve peak performance.  
+- Example:  
+  - **Train to Train phase**: Use mesocycles to balance growth, skill development, and recovery during PHV.  
+  - **Train to Win phase**: Sophisticated macrocycles tailored to major competitions.  
+
+## Practical Coaching Implications
+- Match training content to athlete’s developmental stage.  
+- Avoid early specialisation to reduce burnout and injury risk.  
+- Use periodisation to:  
+  - Prevent overtraining.  
+  - Peak for competitions.  
+  - Balance skill, physical, and tactical development.  
+- Encourage transition into Active for Life for long-term participation.  
+
+## Key Takeaways
+- LTAD outlines stages from early childhood through elite sport to lifelong activity.  
+- Periodisation structures training into macro, meso, and micro cycles.  
+- Tapering and planned recovery are crucial for peak performance.  
+- Effective coaching requires blending LTAD principles with periodisation to meet athlete needs.  
+
+## Week 8 Training File Additions
+### Learn to Train (LTT)
+- Girls 8–11, Boys 9–12.
+- Formalise training: tactics, skills, conditioning.
+- Variety: at least 1 team sport, around 3 days sport-specific, around 3 days other sports.
+- Training:Competition approximately 70:30.
+- Emphasis: sport-specific skills, coordination/fine motor window.
+- Manage early/late maturers; arms/legs can grow before trunk, possible flexibility decrease.
+- Aerobic via games; anaerobic/speed via relays; strength via bodyweight, plyometrics, trunk control.
+
+### Train to Train (TTT)
+- Girls 11–15, Boys 12–16.
+- Puberty-related physical and psychosocial changes.
+- "Build the engine": aerobic base, speed, strength, flexibility.
+- Refine to 2 sports across seasons; move toward position-specific tactics.
+- Training:Competition approximately 60:40 (meaningful competition).
+- PHV around 11 years (girls) and 14 years (boys).
+- Increased red blood cell count, especially in boys; heart/lung growth changes.
+- Individualise loads; monitor growth; deload every 4–5 weeks.
+- Cognitive progression supports abstract thinking, greater drill/strategy complexity, positive reinforcement, reflection, and visual cue recognition.
+
+### Coaching and Parents
+- Limit explicit feedback and use guided discovery; treat mistakes as learning opportunities.
+- Rotate positions/events for broader understanding.
+- Girls’ CNS often matures earlier and may support complex drills sooner.
+- Parent guidance: avoid early specialisation, balance sport/school, focus on development over winning.
+
+### Overuse and Growth Conditions
+- **Osgood-Schlatter (knee):** tibial tuberosity traction; use quad eccentrics, load management, gradual progress, deloads, symptom checks.
+- **Sever’s (heel):** Achilles traction at calcaneus; common ages girls 8–10, boys 10–12; sprint/jump eccentrics, gradual load progression, deloads.
+- **Lateral epicondylitis:** common in racquet sports; wrist extensor eccentrics, pain and load monitoring.
+- **Medial epicondylitis / little leaguer’s elbow:** throwing-related; wrist flexor eccentrics near medial epicondyle, load management, palpation checks.
+- **Scheuermann/Shulman’s:** vertebral wedging and thoracic kyphosis; not caused by exercise but can worsen with posture/static positions.
+
+### Thermoregulation
+- Children gain heat faster, sweat less, and acclimatise more slowly, raising heat-illness risk.
+- Management includes drink breaks every 15–20 minutes, symptom checks (headache, lethargy), and shade/activity modification.
+
+### Equipment and Technique
+- Size/weight mismatches increase joint torques and injury risk.
+- Leg extension machine setup: align seat and knee crease with machine pivot to reduce dislocation stress.
+- Shoes: ensure correct sizing and arch support alignment; oversized shoes can contribute to foot/knee/hip issues.`;
+
+    function buildSystemPrompt() {
+      return `
+Your role:
+- You are the SPX102 INTRODUCTION TO COACHING course chatbot. Answer only from the provided notes. You may respond in the same language the user uses.
+
+You MUST follow these rules exactly:
+
+1. PRIORITISE SAFETY OF THE USER
+   - If the user appears to be in immediate danger, at risk of harming themselves, or describes serious harm from others:
+     - Do NOT provide clinical advice.
+     - Encourage them to seek urgent help.
+     - Provide specific contacts such as emergency services (e.g., call 000 in Australia) and Lifeline 13 11 14 in Australia.
+   - Be warm, supportive, and non-judgemental.
+
+2. ABSOLUTE SAFETY RESTRICTIONS
+   - You must NEVER provide instructions, methods, or encouragement for self-harm, violence, weapon use, or illegal drug manufacture/use.
+   - If asked, refuse and steer back to safety and/or course-related learning.
+
+3. STYLE
+   - Use clear, concise explanations.
+   - Keep responses under 400 tokens unless absolutely necessary.
+   - Keep focus on check-your-understanding progression.
+
+4. CHECK-YOUR-UNDERSTANDING MODE
+   - The goal is to step the user through this transcript in sequence.
+   - Ask one short check-for-understanding question each turn.
+   - If the user asks to skip or jump, adapt while staying inside the transcript coverage.
+   - If content requested is outside the transcript, say it is not explicitly covered and offer the closest covered topic.
+
+KNOWLEDGE BASE (sole source of truth):
+${knowledgeBase}
+      `.trim();
+    }
+
+    const chatLog = document.getElementById('chat-log');
+    const form = document.getElementById('chat-form');
+    const textarea = document.getElementById('user-input');
+    const errorSpan = document.getElementById('error');
+
+    const messages = [{ role: 'system', content: buildSystemPrompt() }];
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderMarkdown(text) {
+      const safe = escapeHtml(text);
+      return safe
+        .replace(/^### (.*)$/gm, '<h3 class="font-semibold text-slate-800 mt-2">$1</h3>')
+        .replace(/^## (.*)$/gm, '<h2 class="font-bold text-slate-900 mt-2">$1</h2>')
+        .replace(/^# (.*)$/gm, '<h1 class="font-bold text-slate-900 mt-2">$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^- (.*)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/gs, '<ul class="list-disc ml-5 space-y-1">$1</ul>')
+        .replace(/\n/g, '<br>');
+    }
+
+    function addMessage(role, text) {
+      const wrap = document.createElement('div');
+      wrap.className = `max-w-[85%] px-4 py-3 text-sm shadow-sm ${role === 'user' ? 'ml-auto bg-blue-700 text-white msg-user' : 'bg-white border border-slate-200 text-slate-800 msg-bot'}`;
+      wrap.innerHTML = role === 'user' ? escapeHtml(text).replace(/\n/g, '<br>') : renderMarkdown(text);
+      chatLog.appendChild(wrap);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    async function sendMessage(userText) {
+      errorSpan.textContent = '';
+      addMessage('user', userText);
+
+      const contentForModel = `${guidedDiscoveryPrompt}\n\nStudent message: ${userText}`;
+      messages.push({ role: 'user', content: contentForModel });
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages, stream: false }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'Request failed');
+        }
+
+        const data = await response.json();
+        const assistantText = data?.content || data?.message || 'Sorry, I could not generate a response.';
+        messages.push({ role: 'assistant', content: assistantText });
+        addMessage('assistant', assistantText);
+      } catch (err) {
+        errorSpan.textContent = 'Error: Unable to reach chatbot backend right now.';
+        addMessage('assistant', 'I could not complete that request due to a backend issue. Please try again.');
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+      textarea.value = '';
+      await sendMessage(text);
+    });
+
+    addMessage('assistant', 'Welcome to Check Your Understanding mode for LTAD and Periodisation. I will guide you step-by-step through the transcript content. To begin, what is your current understanding of LTAD?');
+  </script>
+</body>
+</html>
