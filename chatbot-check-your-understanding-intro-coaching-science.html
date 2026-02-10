@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>SPX102 Coach Ross • Check Your Understanding</title>
+  <title>SPX101 Coach Ross • Check Your Understanding</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <!-- Tailwind CSS for modern styling -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -394,10 +394,10 @@
     
     <div class="flex-1 min-w-0">
       <h1 class="text-lg font-semibold text-slate-900 truncate flex items-center gap-2">
-        Dr. Ross Clark
+        Dr. Ro(bot)ss Clark
         <span class="px-2 py-0.5 rounded-full bg-[#0052C4]/10 text-[#0052C4] text-xs font-medium border border-[#0052C4]/20">AI Coach</span>
       </h1>
-      <p class="text-xs text-slate-500 truncate">SPX102 Check Your Understanding • Intro to Coaching Science</p>
+      <p class="text-xs text-slate-500 truncate">SPX101 Check Your Understanding • Intro to Sports and Exercise Science</p>
     </div>
     
     <div class="flex items-center gap-2 ml-auto">
@@ -442,7 +442,7 @@
           <p class="text-[11px] text-slate-500 leading-relaxed">Tip: Choose browser speech for multilingual playback.</p>
         </div>
       </div>
-      <button onclick="alert('I can only answer questions based on the SPX102 Notes.')" class="p-2 text-slate-500 hover:text-slate-900 transition-colors rounded-full hover:bg-slate-100" aria-label="Information about the chatbot">
+      <button onclick="alert('I can only answer questions based on the SPX101 Notes.')" class="p-2 text-slate-500 hover:text-slate-900 transition-colors rounded-full hover:bg-slate-100" aria-label="Information about the chatbot">
         <i data-lucide="info" class="w-5 h-5"></i>
       </button>
     </div>
@@ -502,15 +502,15 @@
         <div class="text-xs text-slate-500 ml-1">Ro(bot)ss Clark</div>
         <div class="msg-bot bg-white border border-slate-200 p-4 text-sm leading-relaxed shadow-sm text-slate-800">
           <div data-role="bot-content">
-            <p>Hello! I'm your AI assistant for <span class="text-[#0052C4] font-semibold">SPX102 CHECK YOUR UNDERSTANDING</span>.</p>
+            <p>Hello! I'm your AI assistant for <span class="text-[#0052C4] font-semibold">SPX101 CHECK YOUR UNDERSTANDING</span>.</p>
             <br>
-            <p>I will guide you step-by-step through the Introduction to Coaching Science transcript in discovery mode. Where should we start?</p>
+            <p>I will guide you step-by-step through the Introduction to Sports and Exercise Science weeks course material in discovery mode. Where should we start?</p>
             <div class="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 class="followup-button inline-flex items-center gap-2 rounded-full bg-[#0052C4] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#1a73e8]"
                 data-role="intro-prompt"
-                data-prompt="Start from the beginning and guide me through the role of the coach in this transcript.">
+                data-prompt="Start from the beginning and guide me through the role of the coach in the weeks course material.">
                 Start from the beginning
               </button>
               <button
@@ -609,7 +609,7 @@
     </form>
     <div class="text-center mt-2 space-y-1">
        <span id="error" class="block text-xs text-red-400 font-medium"></span>
-       <span class="block text-[10px] text-slate-500">I can only answer questions based on the SPX102 INTRODUCTION TO COACHING notes I was given.</span>
+       <span class="block text-[10px] text-slate-500">I can only answer questions based on the SPX101 INTRODUCTION TO SPORTS AND EXERCISE SCIENCE notes I was given.</span>
        <span class="block text-[10px] text-slate-500">Memory is saved only on this device/browser to keep conversations anonymous.</span>
     </div>
   </footer>
@@ -637,12 +637,12 @@
       male: "am_fenrir",
     };
     const INTRO_PROMPT_RESPONSES = {
-      "intro-usage": `I am designed to help you work through the **SPX102 Introduction to Coaching Science** pre-recorded segment in guided discovery mode.
+      "intro-usage": `I am designed to help you work through the **SPX101 Introduction to Sports and Exercise Science** pre-recorded segment in guided discovery mode.
 
 **How this version works**
-- Discovery mode is on by default and this chatbot is focused on one transcript.
+- Discovery mode is on by default and this chatbot is focused on the weeks course material.
 - I will step you through the material progressively instead of jumping straight to final answers.
-- If you ask for content not directly in the transcript, I will tell you once in that response that it is related but not explicitly covered.
+- If you ask for content not directly in the weeks course material, I will tell you once in that response that it is related but not explicitly covered.
 
 **You can still**
 - Ask questions, request examples, and ask to be quizzed.
@@ -720,9 +720,9 @@ Start by asking me what I already know about the topic we are discussing.`;
     let pdfAttachment = null;
     let guidedDiscoveryEnabled = true;
     const guidedDiscoveryPrompt = `You are a guided learning tutor, not an answer engine. Default to guided discovery:
-    - ORIENT (1–2 sentences): frame what kind of idea this is.
+    - What you are Learning: (1–2 sentences): frame what kind of idea this is.
     - CORE IDEA: up to 3 short bullet points only.
-    - ONE EXAMPLE: one applied example relevant to SPX102 contexts.
+    - ONE EXAMPLE: one applied example relevant to SPX101 contexts.
     - BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
     - DEPTH CHOICE: offer 2–4 next-step options and stop.
     Rules:
@@ -748,7 +748,7 @@ Ask the student what they want to learn about, then follow this new method.`;
 
     // --- KNOWLEDGE BASE (Restored) ---
     const knowledgeBase = `
-# Introduction to Coaching Science — Check Your Understanding Knowledge Base
+# Introduction to Sports and Exercise Science — Check Your Understanding Knowledge Base
 
 ## Session overview
 - This pre-recorded segment introduces key concepts in coaching science.
@@ -858,7 +858,7 @@ Ask the student what they want to learn about, then follow this new method.`;
 ## 5) Technology in coaching
 
 ### Video analysis
-- Use pose recognition (referred to as pyros recognition in the transcript context) to assess movement kinematics/technique.
+- Use pose recognition (referred to as pyros recognition in the weeks course material context) to assess movement kinematics/technique.
 - Use match footage analysis for player positioning and action patterns in contexts.
 - Use notational analysis: count actions and examine associations between action frequencies and outcomes.
 - These approaches can improve outcomes and coaching practice.
@@ -895,8 +895,65 @@ Ask the student what they want to learn about, then follow this new method.`;
   - show actual bar speed,
   - then adjust technique based on objective data.
 
+## 7) Ecological Dynamics & The Constraints-Led Approach (CLA)
+
+Victor Wembanyama isn't training to perfect a move. He's training to solve a puzzle.
+
+### Core Concept
+- There is no such thing as muscle memory.
+- Every movement is a direct partnership between the brain and body reacting to the environment in real-time.
+
+### Applying the Method: The Wembanyama Case Study
+- **Perceptual Coupling:** Training sessions move away from pre-planned drills. Victor is coached to read and react to defensive spacing.
+- **Movement Variability:** Participating in diverse activities like kung fu and soccer to explore how his unique frame can self-organise.
+- **Chaos & Load:** Using 3-on-3 scenarios under high cognitive load (noise, visual distractions) to simulate NBA game conditions.
+
+### The Newell Model: Three Constraints
+
+#### 1. Individual (Performer)
+Factors internal to the athlete (height, weight, anxiety).
+
+Examples:
+- Wemby's wingspan: Dictates reach affordances available.
+- Stroke patient's hemiparesis: Muscle weakness limits normal movement.
+- Fatigue: Coordination shifts to less efficient patterns under fatigue.
+
+#### 2. Environmental
+Global factors not specific to the task (weather, noise).
+
+Examples:
+- Crowd noise (Otte's earmuffs): Blocking auditory cues forces reliance on visual perception.
+- Slippery court surface: Changes biomechanical stability requirements.
+- Wind speed in archery: Requires continuous aim updates.
+
+#### 3. Task
+Specific rules, goals, and equipment. The coach's primary lever.
+
+Examples:
+- Using a heavy ball: Changes sensory feedback for efficient mechanics.
+- No dribbling allowed: Removes dribble affordance, prioritizing passing.
+- 5-second shot clock: Forces quicker decision making.
+
+### Clinical Science in Practice
+- **Stroke Rehabilitation (CIMT):** The good arm is placed in a restrictive mitt for 90% of waking hours to force use of the affected arm.
+- **ACL Prevention:** Landing drills performed while reacting to external flashing lights (visual cues) to improve reactive stability.
+
+### Simulation Sandbox Scenarios
+
+#### 1) Wemby vs. The Wall (Basketball)
+- **Scenario:** Low-light gym, auditory noise, points only awarded for open side moves.
+- **Outcome:** Athlete stops relying on pre-scripted patterns and starts coupling action to defensive spacing.
+
+#### 2) The Verticality Grid (Soccer)
+- **Scenario:** Pitch narrowed significantly, must move ball forward every second pass.
+- **Outcome:** Nervous system self-organises to find vertical lanes instead of safe lateral options.
+
+#### 3) The High Catching Drill (Gaelic)
+- **Scenario:** Balls soaked in soapy water, opposition tapping arms with pool noodles.
+- **Outcome:** Development of a robust catching mechanism that accounts for suboptimal grip and interference.
+
 ## Practical intent for this chatbot version
-- This chatbot should guide learners through this transcript progressively in discovery mode.
+- This chatbot should guide learners through the weeks course material progressively in discovery mode.
 - It should prioritise explanations, checks for understanding, and sequence through topics from role of coach → approaches → constraints → applied examples → technology examples.
 `.trim();
 
@@ -904,7 +961,7 @@ Ask the student what they want to learn about, then follow this new method.`;
     function buildSystemPrompt() {
       return `
 Your role:
-- You are the SPX102 INTRODUCTION TO COACHING course chatbot. Answer only from the provided notes. You may respond in the same language the user uses to ask the question, or switch to the language the user asks you to use. 
+- You are the SPX101 INTRODUCTION TO SPORTS AND EXERCISE SCIENCE course chatbot. Answer only from the provided notes. You may respond in the same language the user uses to ask the question, or switch to the language the user asks you to use. 
 
 You MUST follow these rules exactly:
 
@@ -944,7 +1001,7 @@ You MUST follow these rules exactly:
    - If no follow-ups, omit the markers entirely.
 
 5. SCOPE BOUNDARY HANDLING
-   - If you include information related to, but not explicitly covered in, the provided transcript, include exactly one brief note in the response to signal this.
+   - If you include information related to, but not explicitly covered in, the provided weeks course material, include exactly one brief note in the response to signal this.
    - Do not repeat this note more than once in the same response.
 
 KNOWLEDGE BASE (sole source of truth):
