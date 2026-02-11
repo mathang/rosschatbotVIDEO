@@ -759,7 +759,7 @@ Start by asking me what I already know about the topic we are discussing.`;
     - CORE IDEA: up to 3 short bullet points only.
     - ONE EXAMPLE: one applied example relevant to SPX102 contexts.
     - BOUNDARY/CONTRAST: what it is not / common misconception / breakdown case.
-    - DEPTH CHOICE: offer 2–4 next-step options and stop.
+    - DEPTH CHOICE: offer 2–4 next-step options as a numbered list and stop.
     Rules:
     - One new concept per turn maximum.
     - Use only the provided knowledge base/retrieved excerpts; if not supported, say so and pivot to nearest supported concept.
@@ -3548,14 +3548,38 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
       }
     }
 
+    function isDepthChoiceHeading(line) {
+      const normalized = line.replace(/\*\*/g, "").trim();
+      return (
+        /^depth choice(s)?:/i.test(normalized) ||
+        /^going deeper:?/i.test(normalized) ||
+        /^would you like to (explore|discuss|learn)/i.test(normalized)
+      );
+    }
+
+    function normalizeDepthChoiceLine(line) {
+      if (!line) return "";
+      const trimmed = line.trim();
+      if (!trimmed) return "";
+      const bulletMatch = trimmed.match(/^[-*•]\s+(.*)/);
+      const numberedMatch = trimmed.match(/^\d+\.\s+(.*)/);
+      const letteredMatch = trimmed.match(/^[A-D]\)\s+(.*)/i);
+      const cleaned = bulletMatch?.[1] || numberedMatch?.[1] || letteredMatch?.[1] || trimmed;
+      return cleaned.trim();
+    }
+
     function extractDepthChoicesFromText(text) {
       if (!text) return [];
       const lines = text.split("\n").map((line) => line.trim());
-      const startIndex = lines.findIndex((line) =>
-        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, ""))
-      );
+      const startIndex = lines.findIndex((line) => isDepthChoiceHeading(line));
       if (startIndex === -1) return [];
       const choices = [];
+      const headingLine = lines[startIndex] || "";
+      const headingInlineChoice = headingLine.replace(/^[^:]+:\s*/i, "").trim();
+      if (headingInlineChoice) {
+        choices.push(normalizeDepthChoiceLine(headingInlineChoice));
+      }
+
       for (let i = startIndex + 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line) {
@@ -3563,11 +3587,11 @@ function playAudioFromBlob(blob, button, contentEl, sentenceMetadata, playbackTo
           continue;
         }
         if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
-        const bulletMatch = line.match(/^[-*•]\s+(.*)/);
-        const numberedMatch = line.match(/^\d+\.\s+(.*)/);
-        const choice = bulletMatch?.[1] || numberedMatch?.[1];
+        if (isDepthChoiceHeading(line) && i !== startIndex) continue;
+
+        const choice = normalizeDepthChoiceLine(line);
         if (choice) {
-          choices.push(choice.trim());
+          choices.push(choice);
         } else if (choices.length) {
           break;
         }
@@ -4159,15 +4183,22 @@ Do not include the correct answer or any extra text.`;
     function stripDepthChoicesSection(text) {
       if (!text) return text;
       const lines = text.split("\n");
-      const startIndex = lines.findIndex((line) =>
-        /^depth choice(s)?:/i.test(line.replace(/\*\*/g, "").trim())
-      );
+      const startIndex = lines.findIndex((line) => isDepthChoiceHeading(line));
       if (startIndex === -1) return text;
       let endIndex = startIndex + 1;
+      let sawChoiceLine = false;
       for (; endIndex < lines.length; endIndex++) {
         const line = lines[endIndex].trim();
-        if (!line) continue;
-        if (/^[A-Z][A-Za-z\s]+:/.test(line)) break;
+        if (!line) {
+          if (sawChoiceLine) break;
+          continue;
+        }
+        if (/^[A-Z][A-Za-z\s]+:/.test(line) && !isDepthChoiceHeading(line)) break;
+        if (isDepthChoiceHeading(line)) {
+          sawChoiceLine = true;
+          continue;
+        }
+        sawChoiceLine = true;
       }
       const filtered = lines.slice(0, startIndex).concat(lines.slice(endIndex));
       return filtered.join("\n").trim();
